@@ -12,30 +12,31 @@
    - [The 60FPS Mandate](#the-60fps-mandate)
    - [The Mobile Thermal Cap](#the-mobile-thermal-cap)
 3. [System Architecture Overview](#system-architecture-overview)
-4. [Deep Dive Phase 1: Static Hardware Profiling](#deep-dive-phase-1-static-hardware-profiling)
+4. [Deep Dive Phase 1: ENVIRONMENT & HARDWARE PROFILING](#deep-dive-phase-1-environment--hardware-profiling)
    - [WebGL Extraction API constraints](#webgl-extraction-api-constraints)
-   - [The Classification Heuristic Matrix](#the-classification-heuristic-matrix)
-   - [Memory & Multi-threading Overrides](#memory--multi-threading-overrides)
-5. [Deep Dive Phase 2: Dynamic Live V-Sync Throttling](#deep-dive-phase-2-dynamic-live-v-sync-throttling)
+5. [Deep Dive Phase 2: HEURISTIC GPU CLASSIFICATION](#deep-dive-phase-2-heuristic-gpu-classification)
+   - [The Massive Classification Matrix](#the-massive-classification-matrix)
+6. [Deep Dive Phase 3: SYSTEM LIMITS & SAFETY OVERRIDES](#deep-dive-phase-3-system-limits--safety-overrides)
+7. [Deep Dive Phase 4: LIVE FPS PERFORMANCE MONITOR](#deep-dive-phase-4-live-fps-performance-monitor)
    - [The Measurement Loop](#the-measurement-loop)
    - [Grace Periods & Hydration Tolerance](#grace-periods--hydration-tolerance)
    - [Frame Pacing & Jitter Mechanics](#frame-pacing--jitter-mechanics)
    - [Advanced Battery Saver Mode Logic](#advanced-battery-saver-mode-logic)
    - [Sustained Drop Ticks Calculation](#sustained-drop-ticks-calculation)
-6. [Real-World Exection Scenarios](#real-world-execution-scenarios)
+8. [Real-World Execution Scenarios](#real-world-execution-scenarios)
    - [Scenario A: The M1 Max MacBook Pro](#scenario-a-the-m1-max-macbook-pro)
    - [Scenario B: Mid-Range Android entering Battery Saver](#scenario-b-mid-range-android-entering-battery-saver)
    - [Scenario C: The Unknown Budget Desktop](#scenario-c-the-unknown-budget-desktop)
    - [Scenario D: Snapdragon 8 Elite Under Heavy Thermal Load](#scenario-d-snapdragon-8-elite-under-heavy-thermal-load)
-7. [Cross-Language Reference Implementations](#cross-language-reference-implementations)
+9. [Cross-Language Reference Implementations](#cross-language-reference-implementations)
    - [TypeScript (Next.js Application Source)](#typescript-nextjs-application-source)
    - [C & C++ (Native Hooks)](#c--c-native-hooks)
    - [Rust & Go (Concurrent Background Workers)](#rust--go-concurrent-background-workers)
    - [Java & Dart (Mobile Cross-Platform Systems)](#java--dart-mobile-cross-platform-systems)
    - [Python (Data Science & Analytics Mocking)](#python-data-science--analytics-mocking)
-8. [Data Structures & Specifications](#data-structures--specifications)
-9. [Integration Guidelines](#integration-guidelines)
-10. [Conclusion & Future Scaling](#conclusion--future-scaling)
+10. [Data Structures & Specifications](#data-structures--specifications)
+11. [Integration Guidelines](#integration-guidelines)
+12. [Conclusion & Future Scaling](#conclusion--future-scaling)
 
 ---
 
@@ -47,7 +48,7 @@ Too often, modern web applications dictate a "one size fits all" approach to UI.
 
 **HPOE bridges this gap autonomously.** It is a self-adjusting, reactive profiler that runs invisibly alongside the application runtime. 
 
-Unlike standard binary detection (e.g., checking if `prefers-reduced-motion` is on), HPOE uses a sophisticated two-phase approach:
+Unlike standard binary detection (e.g., checking if `prefers-reduced-motion` is on), HPOE uses a sophisticated approach:
 1. **Static Classification:** Extensively parses backend/driver string identifiers to estimate a physical device's baseline theoretical capabilities upon initial load.
 2. **Dynamic Live Telemetry:** Hooks directly into the renderer's V-Sync loop (e.g., `requestAnimationFrame`) to persistently measure frame pacing. Should the actual runtime performance struggle under thermal load, or artificially cap itself due to OS-level Battery Saver modes, HPOE dynamically steps down the UI tier to restore responsiveness and structural stability.
 
@@ -80,15 +81,15 @@ However, doing so continuously forces the GPU to draw near-peak voltage. Within 
 
 ## System Architecture Overview
 
-The system operates across two synchronous phases designed to create a completely foolproof fallback loop.
+The system operates across sequential algorithmic phases designed to create a completely foolproof fallback loop.
 
 ```mermaid
 graph TD
-    A[Application Mounted] --> B[Phase 1: Hardware Static Profiling]
-    B --> C{Is Device Recognized?}
-    C -->|Yes, e.g. RTX 4090| D[Assign Theoretical Tier]
-    C -->|No, Unknown Fallback| E[Assign Low Tier]
-    D --> F{Apply Hardware Fail-safes}
+    A[Application Mounted] --> B[Phase 1: Environment & Hardware Profiling]
+    B --> C[Phase 2: Heuristic GPU Classification]
+    C -->|e.g. RTX 4090| D[Assign Theoretical Tier]
+    C -->|Unknown Fallback| E[Assign Low Tier]
+    D --> F[Phase 3: System Limits & Safety Overrides]
     E --> F
     F -->|Mobile Device Detected| G[Force Cap to Mid]
     F -->|Constrained RAM < 4GB| H[Force Cap to Mid/Low]
@@ -98,7 +99,7 @@ graph TD
     H --> J
     I --> J
     
-    J --> K[Phase 2: Live V-Sync Monitor]
+    J --> K[Phase 4: Live FPS Performance Monitor]
     K --> L(Grace Period 3000ms)
     L --> M[Continuous FPS Monitoring]
     M --> N{Is FPS Dropping Consistently?}
@@ -108,12 +109,9 @@ graph TD
     P --> M
 ```
 
-1. **Phase 1** does its absolute best to predict what the user's machine can handle before any visual artifacts have a chance to hit the screen. This ensures the user isn't forced to watch a jarring UI recalculation and downgrade process just to read a page.
-2. **Phase 2** exists because Phase 1 is never mathematically flawless. A machine might be running background renders, the laptop might be on low-battery mode, or the GPU might be thermal throttling in a hot room. Phase 2 trusts the raw, undeniable math of frame delivery times over the device manufacturer's promises.
-
 ---
 
-## Deep Dive Phase 1: Static Hardware Profiling
+## Deep Dive Phase 1: ENVIRONMENT & HARDWARE PROFILING
 
 To set the initial tier accurately, we must interrogate the browser/OS for the raw hardware identifier string. In web environments, standard browser fingerprinting protections inherently obfuscate direct hardware capabilities. 
 
@@ -134,7 +132,9 @@ Many modern browsers, particularly Safari on iOS or browsers with strict anti-tr
 
 If a string reads "Adreno", but the device boasts 8 physical cores and an 8192px texture size, HPOE assumes it is a mid-to-high end modern smartphone masked by the OS and gracefully assigns it to the `Mid` tier rather than panicking to a fallback.
 
-### The Classification Heuristic Matrix
+---
+
+## Deep Dive Phase 2: HEURISTIC GPU CLASSIFICATION
 
 HPOE implements an 11-branch massive regex classification engine to identify the exact GPU vendor and relative microarchitecture class. By doing regex string detection, the algorithm remains profoundly fast and has near zero impact on execution load time.
 
@@ -176,18 +176,21 @@ Crucial to the Android market share. HPOE attempts to extract the numerical patt
 - Any SOC falling to `powervr`, `unisoc`, or `spreadtrum` inherently lacks the graphical throughput rendering it directly unsafe for processing multi-layered Gaussian rendering.
 - If the GPU is globally unrecognized, it utilizes the "Assume the worst to protect the user" philosophy and caps at `Low`.
 
-### Memory & Multi-threading Overrides
+---
+
+## Deep Dive Phase 3: SYSTEM LIMITS & SAFETY OVERRIDES
+
 Post-heuristic analysis, overrides determine rigid constraints:
 - Systems under `3GB` of system RAM mechanically cannot cache the necessary browser buffers required for heavy graphical lifting. They are banned from `High`.
 - Devices executing off 2 memory threads or possessing less than 2 physical CPU cores are universally set to `Very Low`, assuming massive legacy conditions or extreme hardware starvation.
 
 ---
 
-## Deep Dive Phase 2: Dynamic Live V-Sync Throttling
+## Deep Dive Phase 4: LIVE FPS PERFORMANCE MONITOR
 
 The live-monitoring phase is an architectural masterpiece solving the problem of theoretical capability vs. real-time circumstantial execution. 
 Hardware profiling answers: *"What is this machine? "*
-Phase 2 answers: *"Is this machine currently dying from rendering this? "*
+Phase 4 answers: *"Is this machine currently dying from rendering this? "*
 
 ### The Measurement Loop
 The engine mounts an isolated asynchronous loop mapping to `requestAnimationFrame` (in TS/JS/Dart environments) or executing in dedicated concurrent threads tracing frame pacing logic in native runtime (Go, Rust, C++). 
@@ -197,7 +200,7 @@ It isolates exactly how many frames achieve calculation within a 1s (1000ms) int
 
 ### Grace Periods & Hydration Tolerance
 When modern application frameworks (Next.js, React, Nuxt) initialize on the client, they experience synchronous blocking while "hydrating" network templates against DOM manipulation. During the first 1-3 seconds, even an RTX 4090 processor may report 15 FPS due to JS thread blockage, not graphical rendering limitations.
-To prevent immediate false-positive downgrades, Phase 2 implements a rigid **3000ms Grace Period**, entirely ignoring any massive lag events that occur globally during website bootstrap.
+To prevent immediate false-positive downgrades, Phase 4 implements a rigid **3000ms Grace Period**, entirely ignoring any massive lag events that occur globally during website bootstrap.
 
 ### Frame Pacing & Jitter Mechanics
 Instead of just counting FPS, the loop records `maxFrameDelta` tracking the maximum millisecond latency between any two consecutive frames.
@@ -230,23 +233,22 @@ Only when sustained drops violate the ceiling logic (For High, limits to 4 conse
 
 ### Scenario A: The M1 Max MacBook Pro
 **Device:** Desktop Safari on an M1 Max Chip.
-**Phase 1 Execution:** Regex hits `apple` and hits `m1` and hits `max`. Calculates to `High-End Architecture`. RAM and core limits securely pass. The resulting object caches `Tier: High`. UI paints thick multi-layer blurs and particles perfectly.
-**Phase 2 Execution:** Sustains 60 FPS smoothly. Algorithm sleeps efficiently in backgrounds reporting no errors. 
+**Execution Flow:** Regex hits `apple` and hits `m1` and hits `max`. Calculates to `High-End Architecture`. RAM and core limits securely pass. The resulting object caches `Tier: High`. UI paints thick multi-layer blurs and particles perfectly. Live Monitor sustains 60 FPS smoothly. Algorithm sleeps efficiently in backgrounds reporting no errors. 
 
 ### Scenario B: Mid-Range Android entering Battery Saver
 **Device:** Samsung Galaxy A54 running Mali graphics on 20% Battery.
-**Phase 1 Execution:** Resolves `mali g68`. Classifies as `Budget G-Series` mapping baseline capabilities. Core fail-safes recognize 6+ processors with memory intact. Caps `Mid` natively to protect Android thermals.
-**Phase 2 Execution:** The Android OS is automatically enforcing a 30 Hz output mode to prevent shutting down at low-battery limits. The Grace Period fires. HPOE calculates smooth averages around 29.8FPS. The AI algorithm kicks in identifying stable baseline battery saver behavior. Baseline threshold adjusts natively down to `18 FPS` floor levels allowing mid-tier visuals to execute steadily without forced disruption.
+**Execution Flow:** Resolves `mali g68`. Classifies as `Budget G-Series` mapping baseline capabilities. Core fail-safes recognize 6+ processors with memory intact. Caps `Mid` natively to protect Android thermals.
+The Android OS applies a 30 Hz output mode to prevent shutting down at low-battery limits. The Grace Period fires. HPOE calculates smooth averages around 29.8FPS. The AI algorithm kicks in identifying stable baseline battery saver behavior. Baseline threshold adjusts natively down to `18 FPS` floor levels allowing mid-tier visuals to execute steadily without forced disruption.
 
 ### Scenario C: The Unknown Budget Desktop
 **Device:** A corporate Dell machine running a highly outdated, obscure integrated graphics variant.
-**Phase 1 Execution:** String logic hits completely unknown entities. Fails validation trees. Calculates explicitly to fallback mode, tracking the entity securely as `Unknown Fallback`. Drops immediately to `Low` Tier securing flat layout UI mechanics preserving user's business usage integrity over visual flair.
-**Phase 2 Execution:** Monitor verifies baseline stable tracking smoothly due to stripped effects resolving solid 60FPS responses smoothly ensuring application integrity. 
+**Execution Flow:** String logic hits completely unknown entities. Fails validation trees. Calculates explicitly to fallback mode, tracking the entity securely as `Unknown Fallback`. Drops immediately to `Low` Tier securing flat layout UI mechanics preserving user's business usage integrity over visual flair.
+Monitor verifies baseline stable tracking smoothly due to stripped effects resolving solid 60FPS responses smoothly ensuring application integrity. 
 
 ### Scenario D: Snapdragon 8 Elite Under Heavy Thermal Load
 **Device:** Brand new Asus ROG Phone with active tracking, user has been playing intense 3D apps prior. 
-**Phase 1 Execution:** Recognizes `Snapdragon 8 Elite`. Resolves architecture seamlessly, mathematically flagging it as Flagship class. Crucially: Recognizes `isMobileDevice = true`. Enforces physical hardware law restricting processing load down to `Tier: Mid`.
-**Phase 2 Execution:** While phone runs at `Mid`, the intense ambient thermal loads derived from previous user actions trigger physical kernel-level CPU throttling after 40 seconds. Frames suddenly buckle heavily diving from 60FPS down to wildly stuttering 23 FPS measurements alongside massive Frame Delta spacing. HPOE calculates sustained drop markers `+1, +2, +3`. Upon failing the safety boundaries, it fires an explicit warning log terminating `Mid` tier logic down to `Low`. The layout flattens dynamically and within 30 seconds the device sheds 10C worth of ambient temperature preventing critical failures.
+**Execution Flow:** Recognizes `Snapdragon 8 Elite`. Resolves architecture seamlessly, mathematically flagging it as Flagship class. Crucially: Recognizes `isMobileDevice = true`. Enforces physical hardware law restricting processing load down to `Tier: Mid`.
+While phone runs at `Mid`, the intense ambient thermal loads derived from previous user actions trigger physical kernel-level CPU throttling after 40 seconds. Frames suddenly buckle heavily diving from 60FPS down to wildly stuttering 23 FPS measurements alongside massive Frame Delta spacing. HPOE calculates sustained drop markers `+1, +2, +3`. Upon failing the safety boundaries, it fires an explicit warning log terminating `Mid` tier logic down to `Low`. The layout flattens dynamically and within 30 seconds the device sheds 10C worth of ambient temperature preventing critical failures.
 
 ---
 
