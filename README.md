@@ -138,6 +138,13 @@ If a string reads "Adreno", but the device boasts 8 physical cores and an 8192px
 
 HPOE implements an 11-branch massive regex classification engine to identify the exact GPU vendor and relative microarchitecture class. By doing regex string detection, the algorithm remains profoundly fast and has near zero impact on execution load time.
 
+### The Target Configuration Tiers
+The ultimate goal of this phase is to parse the GPU matrix and bucket the user's hardware into one of four strict operational boundaries:
+- **`Tier: High`**: Grants the application full UI/UX rendering capabilities (complex shadows, nested glassmorphism, heavy WebGL). Assigned to Flagship Desktop and discrete GPU components.
+- **`Tier: Mid`**: Modifies the application to reduce multi-layer rendering limits. Assigned to modern integrated graphics and serves as the absolute highest tier theoretically permitted for *any* mobile device.
+- **`Tier: Low`**: Strips out expensive blur calculations and heavy particle animations, falling back to flat colors. Assigned to budget systems, legacy SoC units, or older smartphones.
+- **`Tier: Very Low`**: An extreme fallback converting the UI into a highly static framework. Reserved for memory-starved machines (e.g. <3GB RAM) or 2-core legacy constraints.
+
 #### 1. Apple Silicon & A-Series
 Apple tightly integrates its hardware and OS.
 - If we find `"m[1-9]"` (e.g., M1, M2, M3, M4), it is designated as desktop-class `M-Series Silicon`. If the string contains `"max"`, `"pro"`, or `"ultra"`, it is undisputed high-end desktop hardware.
