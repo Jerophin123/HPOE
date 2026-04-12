@@ -1,5 +1,5 @@
 /// HPOE (Heuristic Page Optimization Engine) - Dart Proposal
-/// Full logic matrix implementation.
+/// Full logic matrix & battery saver live degradation implementation.
 import 'dart:async';
 import 'dart:math';
 
@@ -74,12 +74,49 @@ class HPOE {
 
   void _startDegradationMonitor() {
     int sustainedDrops = 0;
+    int detectedBaseline = 60;
+    int batterySaverTicks = 0;
+    int graceTicks = 0;
+    List<int> measurements = [];
+
     _monitorTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (currentTier == HpoeTier.veryLow || currentTier == HpoeTier.low) { timer.cancel(); return; }
+      
       int fps = _mockGetAppFps();
-      int floor = (currentTier == HpoeTier.high) ? 45 : 38;
+      int maxFrameDelta = _mockGetMaxFrameDelta();
+
+      graceTicks++;
+      if (graceTicks <= 3) {
+        if (graceTicks > 1 && fps > 0) measurements.add(fps);
+        return;
+      }
+
+      if (measurements.isNotEmpty && detectedBaseline == 60) {
+        double avg = measurements.reduce((a, b) => a + b) / measurements.length;
+        if (avg >= 28 && avg <= 34 && maxFrameDelta < 45) {
+          detectedBaseline = 30;
+        }
+      }
+
+      if (detectedBaseline == 60 && fps >= 28 && fps <= 33 && maxFrameDelta < 45) {
+        batterySaverTicks++;
+        if (batterySaverTicks >= 2) {
+          detectedBaseline = 30;
+          sustainedDrops = 0;
+        }
+      } else if (detectedBaseline == 30 && fps >= 45) {
+        detectedBaseline = 60;
+        sustainedDrops = 0;
+        batterySaverTicks = 0;
+      } else if (detectedBaseline == 60 && (fps < 28 || fps > 33 || maxFrameDelta >= 45)) {
+        batterySaverTicks = max(0, batterySaverTicks - 1);
+      }
+
+      int floor = (detectedBaseline == 30) ? ((currentTier == HpoeTier.high) ? 22 : 18) : ((currentTier == HpoeTier.high) ? 45 : 38);
       int limit = (currentTier == HpoeTier.high) ? 4 : 6;
+
       if (fps < floor) sustainedDrops++; else sustainedDrops = max(0, sustainedDrops - 2);
+      
       if (sustainedDrops >= limit) {
         currentTier = currentTier == HpoeTier.high ? HpoeTier.mid : HpoeTier.low;
         print("[HPOE] Downgraded tier.");
@@ -91,4 +128,5 @@ class HPOE {
   void dispose() => _monitorTimer?.cancel();
   String _mockGetGpuInfo() => "Apple M2 Max";
   int _mockGetAppFps() => 60;
+  int _mockGetMaxFrameDelta() => 16;
 }

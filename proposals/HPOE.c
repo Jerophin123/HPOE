@@ -1,6 +1,6 @@
 /**
  * HPOE (Heuristic Page Optimization Engine) - C Proposal
- * Full logic implementation utilizing POSIX regex.h mapping.
+ * Full logic implementation utilizing POSIX regex and Battery Saver Detection.
  */
 
 #include <stdio.h>
@@ -18,6 +18,7 @@ typedef struct { HPOETier currentTier; int isMonitoring; int isMobile; } HPOEPro
 int get_mock_core_count();
 void get_mock_gpu_string(char* buffer);
 int get_mock_sys_fps();
+int get_mock_max_frame_delta();
 
 int test_regex(const char* pattern, const char* str) {
     regex_t regex;
@@ -92,6 +93,8 @@ void hpoe_evaluate(HPOEProfiler* p) {
         if (strstr(gpu, "dimensity 9") || strstr(gpu, "dimensity 8")) calc = TIER_HIGH;
         else if (strstr(gpu, "dimensity") || strstr(gpu, "helio g9") || (cores >= 8 && maxTextureSize >= 8192)) calc = TIER_MID;
         else calc = TIER_LOW;
+    } else if (strstr(gpu, "powervr") || strstr(gpu, "unisoc") || strstr(gpu, "spreadtrum") || strstr(gpu, "tigert")) {
+        calc = TIER_LOW;
     } else { calc = TIER_LOW; }
 
     if (cores <= 2 && memoryGB <= 2) calc = TIER_VERY_LOW;
@@ -105,11 +108,49 @@ void hpoe_evaluate(HPOEProfiler* p) {
 void* degradation_monitor(void* arg) {
     HPOEProfiler* p = (HPOEProfiler*)arg;
     int sustained = 0;
+    int detected_baseline = 60;
+    int battery_saver_ticks = 0;
+    int grace_ticks = 0;
+    int measurements[5] = {0};
+    int m_count = 0;
+
     while (p->isMonitoring && p->currentTier != TIER_VERY_LOW && p->currentTier != TIER_LOW) {
         sleep(1); 
         int fps = get_mock_sys_fps();
-        int floor = (p->currentTier == TIER_HIGH) ? 45 : 38;
+        int max_frame_delta = get_mock_max_frame_delta();
+
+        grace_ticks++;
+        if (grace_ticks <= 3) {
+            if (grace_ticks > 1 && fps > 0 && m_count < 5) measurements[m_count++] = fps;
+            continue;
+        }
+
+        if (m_count > 0 && detected_baseline == 60) {
+            int sum = 0;
+            for (int i = 0; i < m_count; i++) sum += measurements[i];
+            double avg = (double)sum / m_count;
+            if (avg >= 28 && avg <= 34 && max_frame_delta < 45) {
+                detected_baseline = 30;
+            }
+        }
+
+        if (detected_baseline == 60 && fps >= 28 && fps <= 33 && max_frame_delta < 45) {
+            battery_saver_ticks++;
+            if (battery_saver_ticks >= 2) {
+                detected_baseline = 30;
+                sustained = 0;
+            }
+        } else if (detected_baseline == 30 && fps >= 45) {
+            detected_baseline = 60;
+            sustained = 0;
+            battery_saver_ticks = 0;
+        } else if (detected_baseline == 60 && (fps < 28 || fps > 33 || max_frame_delta >= 45)) {
+            if (battery_saver_ticks > 0) battery_saver_ticks--;
+        }
+
+        int floor = (detected_baseline == 30) ? ((p->currentTier == TIER_HIGH) ? 22 : 18) : ((p->currentTier == TIER_HIGH) ? 45 : 38);
         int limit = (p->currentTier == TIER_HIGH) ? 4 : 6;
+
         if (fps < floor) sustained++; else sustained = (sustained - 2 > 0) ? sustained - 2 : 0;
         if (sustained >= limit) {
             p->currentTier = (p->currentTier == TIER_HIGH) ? TIER_MID : TIER_LOW;
@@ -120,7 +161,7 @@ void* degradation_monitor(void* arg) {
     return NULL;
 }
 
-// Mocks
 int get_mock_core_count() { return 12; }
 void get_mock_gpu_string(char* buf) { strcpy(buf, "Nvidia RTX 4070 Ti"); }
 int get_mock_sys_fps() { return 60; }
+int get_mock_max_frame_delta() { return 16; }

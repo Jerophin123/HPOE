@@ -1,8 +1,9 @@
 /**
  * HPOE (Heuristic Page Optimization Engine) - Java Proposal
- * Implements full complex regex device classifications.
+ * Includes Complete Regex Logic & Battery Saver FPS Caps.
  */
 import java.util.regex.*;
+import java.util.*;
 
 public class HPOE {
     public enum Tier { HIGH, MID, LOW, VERY_LOW }
@@ -18,21 +19,16 @@ public class HPOE {
     public void evaluateSystemHardware() {
         int coreCount = Runtime.getRuntime().availableProcessors();
         long memoryGB = Runtime.getRuntime().maxMemory() / (1024 * 1024 * 1024);
-        int maxTextureSize = 8192; // Mock WebGL metric
+        int maxTextureSize = 8192; 
 
         String rawGpu = getMockGpuVendorString().toLowerCase();
         String renderer = rawGpu.replaceAll("\\(r|tm\\)", "").replaceAll("graphics", "").trim();
         Tier calculated = Tier.HIGH;
 
-        // 1. APPLE
         if (renderer.contains("apple")) {
-            if (Pattern.compile("m[1-9]").matcher(renderer).find()) {
-                calculated = (renderer.contains("max") || renderer.contains("pro") || renderer.contains("ultra")) ? Tier.HIGH : Tier.MID;
-            } else {
-                calculated = (coreCount >= 6 && maxTextureSize >= 8192) ? Tier.HIGH : Tier.MID;
-            }
+            if (Pattern.compile("m[1-9]").matcher(renderer).find()) calculated = (renderer.contains("max") || renderer.contains("pro") || renderer.contains("ultra")) ? Tier.HIGH : Tier.MID;
+            else calculated = (coreCount >= 6 && maxTextureSize >= 8192) ? Tier.HIGH : Tier.MID;
         }
-        // 2. NVIDIA
         else if (renderer.contains("nvidia") || renderer.contains("geforce") || renderer.contains("quadro")) {
             if (Pattern.compile("rtx\\s*[2-9][0-9]{3}").matcher(renderer).find() || renderer.contains("titan") || Pattern.compile("quadro\\s*rtx").matcher(renderer).find()) calculated = Tier.HIGH;
             else if (Pattern.compile("gtx\\s*(?:10[6-9][0-9]|16[5-9][0-9]|9[8-9][0-9])").matcher(renderer).find()) calculated = Tier.HIGH;
@@ -40,18 +36,15 @@ public class HPOE {
             else if (Pattern.compile("gtx\\s*(?:4|5|6)[0-9]{2}").matcher(renderer).find() || Pattern.compile("gt\\s*[0-9]+").matcher(renderer).find() || Pattern.compile("[7-9][1-4]0m").matcher(renderer).find() || Pattern.compile("mx[1-4][0-9]{2}").matcher(renderer).find()) calculated = Tier.LOW;
             else calculated = Tier.MID;
         }
-        // 3. AMD
         else if (renderer.contains("amd") || renderer.contains("radeon")) {
             if (Pattern.compile("rx\\s*[5-8][0-9]{3}").matcher(renderer).find() || Pattern.compile("vega\\s*(?:56|64)").matcher(renderer).find() || renderer.contains("radeon pro")) calculated = Tier.HIGH;
             else if (Pattern.compile("rx\\s*(?:4[0-9]{2}|5[7-9][0-9])").matcher(renderer).find() || Pattern.compile("6[6-9]0m").matcher(renderer).find()) calculated = Tier.MID;
             else calculated = Tier.LOW;
         }
-        // 4. INTEL
         else if (renderer.contains("intel")) {
             if (Pattern.compile("arc\\s*a[3-7][0-9]{2}").matcher(renderer).find() || (renderer.contains("iris") && renderer.contains("xe")) || Pattern.compile("iris\\s*(?:plus|pro)").matcher(renderer).find()) calculated = Tier.MID;
             else calculated = Tier.LOW;
         }
-        // 5. QUALCOMM
         else if (renderer.contains("adreno") || renderer.contains("snapdragon")) {
             Matcher m = Pattern.compile("adreno\\s*([0-9]{3})").matcher(renderer);
             int series = (m.find()) ? Integer.parseInt(m.group(1)) : 0;
@@ -61,20 +54,15 @@ public class HPOE {
             else if ((series == 0 && coreCount >= 8 && maxTextureSize >= 8192) || renderer.contains("snapdragon")) calculated = Tier.MID;
             else calculated = Tier.LOW;
         }
-        // 6. MALI
         else if (renderer.contains("mali")) {
             if (renderer.contains("immortalis") || Pattern.compile("g[7-9][1-9][0-9]").matcher(renderer).find() || Pattern.compile("g7[7-9]").matcher(renderer).find()) calculated = Tier.HIGH;
             else if (Pattern.compile("g[7-9][0-9]").matcher(renderer).find()) calculated = Tier.MID;
             else calculated = Tier.LOW;
         }
-        // MISC MOBILE
         else if (renderer.contains("xclipse") || renderer.contains("exynos")) {
             Matcher m = Pattern.compile("xclipse\\s*([0-9]{3})").matcher(renderer);
-            if (m.find()) {
-                calculated = (Integer.parseInt(m.group(1)) >= 920) ? Tier.HIGH : Tier.MID;
-            } else {
-                calculated = (coreCount >= 8 && maxTextureSize >= 8192) ? Tier.HIGH : Tier.LOW;
-            }
+            if (m.find()) calculated = (Integer.parseInt(m.group(1)) >= 920) ? Tier.HIGH : Tier.MID;
+            else calculated = (coreCount >= 8 && maxTextureSize >= 8192) ? Tier.HIGH : Tier.LOW;
         }
         else if (renderer.contains("mediatek") || renderer.contains("dimensity") || renderer.contains("helio")) {
             if (renderer.contains("dimensity 9") || renderer.contains("dimensity 8")) calculated = Tier.HIGH;
@@ -87,11 +75,9 @@ public class HPOE {
             calculated = Tier.LOW;
         }
 
-        // Failsafes
         if (coreCount <= 2 && memoryGB <= 2) calculated = Tier.VERY_LOW;
         else if (coreCount <= 2 || memoryGB <= 2) calculated = Tier.LOW;
         else if (memoryGB <= 3 && calculated == Tier.HIGH) calculated = Tier.MID;
-
         if (isMobileDevice && calculated == Tier.HIGH) calculated = Tier.MID;
 
         currentTier = calculated;
@@ -100,11 +86,45 @@ public class HPOE {
     private void startPerformanceMonitor() {
         Thread t = new Thread(() -> {
             int sustainedDropTicks = 0;
+            int detectedBaselineFps = 60;
+            int batterySaverTicks = 0;
+            int gracePeriodTicks = 0;
+            List<Integer> baselineMeasurements = new ArrayList<>();
+
             while (currentTier != Tier.LOW && currentTier != Tier.VERY_LOW) {
                 try {
                     Thread.sleep(1000);
                     int fps = getMockSystemFps();
-                    int floor = (currentTier == Tier.HIGH) ? 45 : 38;
+                    int maxFrameDelta = getMockMaxFrameDelta();
+
+                    gracePeriodTicks++;
+                    if (gracePeriodTicks <= 3) {
+                        if (gracePeriodTicks > 1 && fps > 0) baselineMeasurements.add(fps);
+                        continue;
+                    }
+
+                    if (baselineMeasurements.size() > 0 && detectedBaselineFps == 60) {
+                        double avg = baselineMeasurements.stream().mapToInt(val -> val).average().orElse(0.0);
+                        if (avg >= 28 && avg <= 34 && maxFrameDelta < 45) {
+                            detectedBaselineFps = 30;
+                        }
+                    }
+
+                    if (detectedBaselineFps == 60 && fps >= 28 && fps <= 33 && maxFrameDelta < 45) {
+                        batterySaverTicks++;
+                        if (batterySaverTicks >= 2) {
+                            detectedBaselineFps = 30;
+                            sustainedDropTicks = 0;
+                        }
+                    } else if (detectedBaselineFps == 30 && fps >= 45) {
+                        detectedBaselineFps = 60;
+                        sustainedDropTicks = 0;
+                        batterySaverTicks = 0;
+                    } else if (detectedBaselineFps == 60 && (fps < 28 || fps > 33 || maxFrameDelta >= 45)) {
+                        batterySaverTicks = Math.max(0, batterySaverTicks - 1);
+                    }
+
+                    int floor = (detectedBaselineFps == 30) ? ((currentTier == Tier.HIGH) ? 22 : 18) : ((currentTier == Tier.HIGH) ? 45 : 38);
                     int limit = (currentTier == Tier.HIGH) ? 4 : 6;
 
                     if (fps < floor) sustainedDropTicks++;
@@ -127,4 +147,5 @@ public class HPOE {
 
     private String getMockGpuVendorString() { return "NVIDIA GeForce RTX 4070 Ti"; }
     private int getMockSystemFps() { return 60; }
+    private int getMockMaxFrameDelta() { return 16; }
 }

@@ -2,7 +2,7 @@ package hpoe
 
 /*
  * HPOE (Heuristic Page Optimization Engine) - Go Proposal
- * Full regex and mobile heuristics.
+ * Full Regex Matrix & Battery Saver Live Degradation Trackers.
  */
 
 import (
@@ -37,8 +37,8 @@ func NewHPOE(isMobile bool) *HPOE {
 
 func (h *HPOE) EvaluateHardware() {
 	cores := runtime.NumCPU()
-	memoryGB := 16 // Mock OS memory
-	maxTextureSize := 8192 // Mock
+	memoryGB := 16 
+	maxTextureSize := 8192 
 	
 	raw := strings.ToLower(mockGetGpuString())
 	reClean := regexp.MustCompile(`\((r|tm)\)|graphics`)
@@ -49,7 +49,6 @@ func (h *HPOE) EvaluateHardware() {
 	has := func(s string) bool { return strings.Contains(renderer, s) }
 	match := func(pat string) bool { return regexp.MustCompile(pat).MatchString(renderer) }
 
-	// 1. APPLE
 	if has("apple") {
 		if match(`m[1-9]`) {
 			if has("max") || has("pro") || has("ultra") { tier = High } else { tier = Mid }
@@ -86,6 +85,8 @@ func (h *HPOE) EvaluateHardware() {
 	} else if has("mediatek") || has("dimensity") || has("helio") {
 		if has("dimensity 9") || has("dimensity 8") { tier = High } else
 		if has("dimensity") || has("helio g9") || (cores >= 8 && maxTextureSize >= 8192) { tier = Mid } else { tier = Low }
+	} else if has("powervr") || has("unisoc") || has("spreadtrum") || has("tigert") {
+		tier = Low
 	} else {
 		tier = Low
 	}
@@ -102,13 +103,51 @@ func (h *HPOE) monitorDegradation() {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	sustainedDrops := 0
+	detectedBaseline := 60
+	batterySaverTicks := 0
+	graceTicks := 0
+	var measurements []int
 
 	for range ticker.C {
 		if h.CurrentTier == VeryLow || h.CurrentTier == Low { return }
+		
 		fps := mockGetAppFps()
+		maxFrameDelta := mockGetMaxFrameDelta()
+
+		graceTicks++
+		if graceTicks <= 3 {
+			if graceTicks > 1 && fps > 0 { measurements = append(measurements, fps) }
+			continue
+		}
+
+		if len(measurements) > 0 && detectedBaseline == 60 {
+			sum := 0
+			for _, m := range measurements { sum += m }
+			avg := float64(sum) / float64(len(measurements))
+			if avg >= 28 && avg <= 34 && maxFrameDelta < 45 { detectedBaseline = 30 }
+		}
+
+		if detectedBaseline == 60 && fps >= 28 && fps <= 33 && maxFrameDelta < 45 {
+			batterySaverTicks++
+			if batterySaverTicks >= 2 {
+				detectedBaseline = 30
+				sustainedDrops = 0
+			}
+		} else if detectedBaseline == 30 && fps >= 45 {
+			detectedBaseline = 60
+			sustainedDrops = 0
+			batterySaverTicks = 0
+		} else if detectedBaseline == 60 && (fps < 28 || fps > 33 || maxFrameDelta >= 45) {
+			if batterySaverTicks > 0 { batterySaverTicks-- }
+		}
+
 		floor := 38
 		limit := 6
-		if h.CurrentTier == High { floor = 45; limit = 4 }
+		if detectedBaseline == 30 {
+			if h.CurrentTier == High { floor = 22 } else { floor = 18 }
+		} else {
+			if h.CurrentTier == High { floor = 45; limit = 4 }
+		}
 
 		if fps < floor { sustainedDrops++ } else {
 			if sustainedDrops-2 > 0 { sustainedDrops -= 2 } else { sustainedDrops = 0 }
@@ -123,3 +162,4 @@ func (h *HPOE) monitorDegradation() {
 
 func mockGetGpuString() string { return "Nvidia RTX 4070" }
 func mockGetAppFps() int       { return 60 }
+func mockGetMaxFrameDelta() int { return 16 }

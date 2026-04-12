@@ -1,5 +1,5 @@
 //! HPOE (Heuristic Page Optimization Engine) - Rust Proposal
-//! Full matrix extraction using regex module.
+//! Includes Battery Saver FPS Check Bounds.
 use std::thread;
 use std::time::Duration;
 use std::sync::{Arc, Mutex};
@@ -86,14 +86,50 @@ impl HpoeProfiler {
         let tier_clone = Arc::clone(&self.tier);
         thread::spawn(move || {
             let mut sustained_drops = 0;
+            let mut detected_baseline = 60;
+            let mut battery_saver_ticks = 0;
+            let mut grace_ticks = 0;
+            let mut measurements: Vec<u32> = Vec::new();
+
             loop {
                 thread::sleep(Duration::from_secs(1));
                 let mut current_tier = *tier_clone.lock().unwrap();
                 if current_tier == Tier::VeryLow || current_tier == Tier::Low { break; }
                 
                 let fps = Self::mock_app_fps();
+                let max_frame_delta = Self::mock_max_frame_delta();
+
+                grace_ticks += 1;
+                if grace_ticks <= 3 {
+                    if grace_ticks > 1 && fps > 0 { measurements.push(fps); }
+                    continue;
+                }
+
+                if !measurements.is_empty() && detected_baseline == 60 {
+                    let sum: u32 = measurements.iter().sum();
+                    let avg = sum as f64 / measurements.len() as f64;
+                    if avg >= 28.0 && avg <= 34.0 && max_frame_delta < 45 {
+                        detected_baseline = 30;
+                    }
+                }
+
+                if detected_baseline == 60 && fps >= 28 && fps <= 33 && max_frame_delta < 45 {
+                    battery_saver_ticks += 1;
+                    if battery_saver_ticks >= 2 {
+                        detected_baseline = 30;
+                        sustained_drops = 0;
+                    }
+                } else if detected_baseline == 30 && fps >= 45 {
+                    detected_baseline = 60;
+                    sustained_drops = 0;
+                    battery_saver_ticks = 0;
+                } else if detected_baseline == 60 && (fps < 28 || fps > 33 || max_frame_delta >= 45) {
+                    battery_saver_ticks = battery_saver_ticks.saturating_sub(1);
+                }
+
+                let floor = if detected_baseline == 30 { if current_tier == Tier::High { 22 } else { 18 } } 
+                            else { if current_tier == Tier::High { 45 } else { 38 } };
                 let limit = if current_tier == Tier::High { 4 } else { 6 };
-                let floor = if current_tier == Tier::High { 45 } else { 38 };
                 
                 if fps < floor { sustained_drops += 1; } else { sustained_drops = sustained_drops.saturating_sub(2); }
                 
@@ -109,4 +145,5 @@ impl HpoeProfiler {
 
     fn mock_gpu_string() -> String { String::from("NVIDIA GeForce RTX 4090") }
     fn mock_app_fps() -> u32 { 60 }
+    fn mock_max_frame_delta() -> u32 { 16 }
 }
