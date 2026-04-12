@@ -1,5 +1,5 @@
 /// HPOE (Heuristic Page Optimization Engine) - Dart Proposal
-/// Full logic matrix & battery saver live degradation implementation.
+/// Full logic matrix & battery saver live degradation with comments.
 import 'dart:async';
 import 'dart:math';
 
@@ -20,6 +20,7 @@ class HPOE {
     int memoryGB = 16;
     int maxTextureSize = 8192;
 
+    // Strip trademarks like (R) or (TM) that break rigid regex matching
     String rawGpu = _mockGetGpuInfo().toLowerCase();
     String renderer = rawGpu.replaceAll(RegExp(r'\((r|tm)\)|graphics'), '').trim();
     HpoeTier calc = HpoeTier.high;
@@ -27,54 +28,86 @@ class HPOE {
     bool has(String s) => renderer.contains(s);
     bool test(String pat) => RegExp(pat).hasMatch(renderer);
 
+    // ---------------------------------------------------------
+    // MASSIVE HEURISTIC GPU CLASSIFICATION MATRIX
+    // ---------------------------------------------------------
+
+    // 1. APPLE SILICON & A-SERIES
     if (has("apple")) {
       calc = test(r"m[1-9]") ? (has("max") || has("pro") || has("ultra") ? HpoeTier.high : HpoeTier.mid) 
                              : (cores >= 6 && maxTextureSize >= 8192 ? HpoeTier.high : HpoeTier.mid);
-    } else if (has("nvidia") || has("geforce") || has("quadro")) {
+    } 
+    // 2. NVIDIA DESKTOP & LAPTOP
+    else if (has("nvidia") || has("geforce") || has("quadro")) {
       if (test(r"rtx\s*[2-9][0-9]{3}") || has("titan") || test(r"quadro\s*rtx")) calc = HpoeTier.high;
       else if (test(r"gtx\s*(?:10[6-9][0-9]|16[5-9][0-9]|9[8-9][0-9])")) calc = HpoeTier.high;
       else if (test(r"gtx\s*(?:1050|970|960|950|780)")) calc = HpoeTier.mid;
       else if (test(r"gtx\s*(?:4|5|6)[0-9]{2}") || test(r"gt\s*[0-9]+") || test(r"[7-9][1-4]0m") || test(r"mx[1-4][0-9]{2}")) calc = HpoeTier.low;
       else calc = HpoeTier.mid;
-    } else if (has("amd") || has("radeon")) {
+    } 
+    // 3. AMD RADEON
+    else if (has("amd") || has("radeon")) {
       if (test(r"rx\s*[5-8][0-9]{3}") || test(r"vega\s*(?:56|64)") || has("radeon pro")) calc = HpoeTier.high;
       else if (test(r"rx\s*(?:4[0-9]{2}|5[7-9][0-9])") || test(r"6[6-9]0m")) calc = HpoeTier.mid;
       else calc = HpoeTier.low;
-    } else if (has("intel")) {
+    } 
+    // 4. INTEL GRAPHICS
+    else if (has("intel")) {
       if (test(r"arc\s*a[3-7][0-9]{2}") || (has("iris") && has("xe")) || test(r"iris\s*(?:plus|pro)")) calc = HpoeTier.mid;
       else calc = HpoeTier.low;
-    } else if (has("adreno") || has("snapdragon")) {
+    } 
+    // 5. QUALCOMM ADRENO / SNAPDRAGON (ANDROID)
+    else if (has("adreno") || has("snapdragon")) {
       var match = RegExp(r"adreno\s*([0-9]{3})").firstMatch(renderer);
       int series = match != null ? int.parse(match.group(1)!) : 0;
       if (series >= 800 || has("snapdragon 8 elite") || has("elite") || has("snapdragon 8 gen")) calc = HpoeTier.high;
       else if (series >= 650 || has("snapdragon 8") || has("snapdragon 7") || (series == 0 && cores >= 8 && maxTextureSize >= 8192) || has("snapdragon")) calc = HpoeTier.mid;
       else calc = HpoeTier.low;
-    } else if (has("mali")) {
+    } 
+    // 6. ARM MALI (ANDROID)
+    else if (has("mali")) {
       if (has("immortalis") || test(r"g[7-9][1-9][0-9]") || test(r"g7[7-9]")) calc = HpoeTier.high;
       else if (test(r"g[7-9][0-9]")) calc = HpoeTier.mid;
       else calc = HpoeTier.low;
-    } else if (has("xclipse") || has("exynos")) {
+    } 
+    // 7. SAMSUNG XCLIPSE / EXYNOS (MOBILE)
+    else if (has("xclipse") || has("exynos")) {
       if (has("xclipse")) {
         var match = RegExp(r"xclipse\s*([0-9]{3})").firstMatch(renderer);
         calc = (match != null && int.parse(match.group(1)!) >= 920) ? HpoeTier.high : HpoeTier.mid;
       } else calc = (cores >= 8 && maxTextureSize >= 8192) ? HpoeTier.high : HpoeTier.low;
-    } else if (has("mediatek") || has("dimensity") || has("helio")) {
+    } 
+    // 8. MEDIATEK (DIMENSITY / HELIO)
+    else if (has("mediatek") || has("dimensity") || has("helio")) {
       if (has("dimensity 9") || has("dimensity 8")) calc = HpoeTier.high;
       else if (has("dimensity") || has("helio g9") || (cores >= 8 && maxTextureSize >= 8192)) calc = HpoeTier.mid;
       else calc = HpoeTier.low;
-    } else { calc = HpoeTier.low; }
+    } 
+    // 9. POWERVR / UNISOC / SPREADTRUM
+    else if (has("powervr") || has("unisoc") || has("spreadtrum") || has("tigert")) {
+      calc = HpoeTier.low;
+    } 
+    // 10. FALLBACK FOR UNKNOWN GPUs
+    else { calc = HpoeTier.low; }
 
+    // Hard limits and Accessibility Overrides
     if (cores <= 2 && memoryGB <= 2) calc = HpoeTier.veryLow;
-    else if (cores <= 2 || memoryGB <= 2) calc = HpoeTier.low;
-    else if (memoryGB <= 3 && calc == HpoeTier.high) calc = HpoeTier.mid;
+    else if (cores <= 2 || memoryGB <= 2) calc = HpoeTier.low; // Only demote on extremely constrained hardware
+    else if (memoryGB <= 3 && calc == HpoeTier.high) calc = HpoeTier.mid; // <=3GB memory can't sustain high-tier
 
+    // Absolute fail-safe: Mobile devices NEVER get "High" tier effects.
     if (isMobile && calc == HpoeTier.high) calc = HpoeTier.mid;
+    
     currentTier = calc;
   }
 
+  // ---------------------------------------------------------
+  // LIVE V-SYNC DEGRADATION MONITOR (FPS SAFETY NET)
+  // Tuned to avoid false-positive downgrades on mid-tier hardware
+  // ---------------------------------------------------------
   void _startDegradationMonitor() {
     int sustainedDrops = 0;
-    int detectedBaseline = 60;
+    int detectedBaseline = 60; // Assume standard 60fps by default
     int batterySaverTicks = 0;
     int graceTicks = 0;
     List<int> measurements = [];
@@ -83,26 +116,30 @@ class HPOE {
       if (currentTier == HpoeTier.veryLow || currentTier == HpoeTier.low) { timer.cancel(); return; }
       
       int fps = _mockGetAppFps();
-      int maxFrameDelta = _mockGetMaxFrameDelta();
+      int maxFrameDelta = _mockGetMaxFrameDelta(); // Tracks maximum MS between consecutive frames
 
       graceTicks++;
       if (graceTicks <= 3) {
+        // Wait for initial hydration to clear, then sample naturally achievable FPS
         if (graceTicks > 1 && fps > 0) measurements.add(fps);
         return;
       }
 
+      // Lock in baseline detection once grace period concludes
       if (measurements.isNotEmpty && detectedBaseline == 60) {
         double avg = measurements.reduce((a, b) => a + b) / measurements.length;
+        // Accurately verify 30fps: average ~30 AND frame pacing is universally stable
         if (avg >= 28 && avg <= 34 && maxFrameDelta < 45) {
           detectedBaseline = 30;
         }
       }
 
+      // Dynamic MID-SESSION Battery Saver Detection
       if (detectedBaseline == 60 && fps >= 28 && fps <= 33 && maxFrameDelta < 45) {
         batterySaverTicks++;
         if (batterySaverTicks >= 2) {
           detectedBaseline = 30;
-          sustainedDrops = 0;
+          sustainedDrops = 0; // Wipe lag penalties incurred during detection phase
         }
       } else if (detectedBaseline == 30 && fps >= 45) {
         detectedBaseline = 60;
@@ -112,6 +149,7 @@ class HPOE {
         batterySaverTicks = max(0, batterySaverTicks - 1);
       }
 
+      // Battery Saver Mode active: Re-assign threshold
       int floor = (detectedBaseline == 30) ? ((currentTier == HpoeTier.high) ? 22 : 18) : ((currentTier == HpoeTier.high) ? 45 : 38);
       int limit = (currentTier == HpoeTier.high) ? 4 : 6;
 
