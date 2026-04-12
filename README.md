@@ -15,5 +15,5 @@ HPOE (Heuristic Page Optimization Engine) is responsible for dynamically identif
 
 ## Directory Structure
 
-- `src/PerformanceProvider.tsx`: The heart of the HPOE architecture.
+- `src/HPOE.tsx`: The heart of the HPOE architecture.
 - `pseudocode.md`: A high-level technical map of the algorithm logic and operations.

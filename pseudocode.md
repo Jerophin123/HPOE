@@ -1,6 +1,6 @@
 # HPOE Algorithm - Pseudocode Representation
 
-This document outlines the high-level pseudocode for the Heuristic Page Optimization Engine (HPOE) as implemented in `PerformanceProvider.tsx`.
+This document outlines the high-level pseudocode for the Heuristic Page Optimization Engine (HPOE) as implemented in `HPOE.tsx`.
 
 ## System Overview
 The HPOE algorithm ensures system stability and 60FPS maintenance via two sequential phases:

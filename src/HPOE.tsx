@@ -5,7 +5,7 @@ import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 
-export type PerformanceTier = "high" | "mid" | "low" | "very-low";
+export type HPOETier = "high" | "mid" | "low" | "very-low";
 
 interface HardwareSpecs {
   vendor: string;
@@ -14,8 +14,8 @@ interface HardwareSpecs {
   estimatedClass: "High-End" | "Mid-Range" | "Budget/Legacy" | "Unknown";
 }
 
-interface PerformanceContextProps {
-  tier: PerformanceTier;
+interface HPOEContextProps {
+  tier: HPOETier;
   reducedMotion: boolean;
   gpuInfo: string | null;
   coreCount: number;
@@ -23,7 +23,7 @@ interface PerformanceContextProps {
   isInitialized: boolean;
 }
 
-const PerformanceContext = createContext<PerformanceContextProps>({
+const HPOEContext = createContext<HPOEContextProps>({
   tier: "high", // Defaults to high to ensure splash screen has blur on mount
   reducedMotion: false,
   gpuInfo: null,
@@ -32,10 +32,10 @@ const PerformanceContext = createContext<PerformanceContextProps>({
   isInitialized: false,
 });
 
-export const usePerformance = () => useContext(PerformanceContext);
+export const useHPOE = () => useContext(HPOEContext);
 
-export function PerformanceProvider({ children }: { children: ReactNode }) {
-  const [metrics, setMetrics] = useState<PerformanceContextProps>({
+export function HPOEProvider({ children }: { children: ReactNode }) {
+  const [metrics, setMetrics] = useState<HPOEContextProps>({
     tier: "high",
     reducedMotion: false,
     gpuInfo: null,
@@ -46,7 +46,7 @@ export function PerformanceProvider({ children }: { children: ReactNode }) {
   
   const [isMounted, setIsMounted] = useState(false);
 
-  const currentTierRef = useRef<PerformanceTier>("high");
+  const currentTierRef = useRef<HPOETier>("high");
 
   useEffect(() => {
     setIsMounted(true);
@@ -62,7 +62,7 @@ export function PerformanceProvider({ children }: { children: ReactNode }) {
       const canvas = document.createElement("canvas");
       const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       
-      let calculatedTier: PerformanceTier = "high";
+      let calculatedTier: HPOETier = "high";
       let specs: HardwareSpecs = {
         vendor: "Unknown",
         architecture: "Unknown",
@@ -321,7 +321,7 @@ export function PerformanceProvider({ children }: { children: ReactNode }) {
       // Developer/Testing Override via URL parameter e.g., ?forceTier=high
       const matchTier = window.location.search.match(/[?&]forceTier=(high|mid|low|very-low)/);
       if (matchTier) {
-        calculatedTier = matchTier[1] as PerformanceTier;
+        calculatedTier = matchTier[1] as HPOETier;
         console.info(`[Hardware Profiler] Tier forcefully overridden to: ${calculatedTier}`);
       }
 
@@ -429,7 +429,7 @@ export function PerformanceProvider({ children }: { children: ReactNode }) {
               const disableDowngrade = window.location.search.includes("disableDowngrade=true");
 
               if (sustainedDropTicks >= currentRequiredDropTicks && !disableDowngrade) {
-                let downgradeTarget: PerformanceTier = "low";
+                let downgradeTarget: HPOETier = "low";
                 if (currentTier === "high") downgradeTarget = "mid";
                 else if (currentTier === "mid") downgradeTarget = "low";
                 else if (currentTier === "low") downgradeTarget = "very-low";
@@ -467,7 +467,7 @@ export function PerformanceProvider({ children }: { children: ReactNode }) {
 
       return () => clearTimeout(initTimeout);
     } catch (e) {
-        console.warn("Performance Profiler encountered an error:", e);
+        console.warn("HPOE Profiler encountered an error:", e);
     }
   }, []);
 
@@ -479,7 +479,7 @@ export function PerformanceProvider({ children }: { children: ReactNode }) {
   }, [metrics.tier, metrics.reducedMotion]);
 
   return (
-    <PerformanceContext.Provider value={metrics}>
+    <HPOEContext.Provider value={metrics}>
       <AnimatePresence>
         {!metrics.isInitialized && (
           <motion.div
@@ -514,6 +514,6 @@ export function PerformanceProvider({ children }: { children: ReactNode }) {
         )}
       </AnimatePresence>
       {children}
-    </PerformanceContext.Provider>
+    </HPOEContext.Provider>
   );
 }
