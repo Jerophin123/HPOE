@@ -311,5 +311,5 @@ As GPUs aggressively evolve across diverse pipelines heavily utilizing Tensor Co
 
 ---
 **License**: MIT 
-**Copyright**: 2026 Delphin Associates
+**Copyright**: 2026 Jerophin D R
 **Author**: Jerophin D R

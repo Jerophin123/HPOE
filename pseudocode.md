@@ -3,13 +3,15 @@
 This document outlines the high-level pseudocode for the Heuristic Page Optimization Engine (HPOE) as implemented in `HPOE.tsx` and all language proposals.
 
 ## System Overview
-The HPOE algorithm ensures system stability and 60FPS maintenance via two sequential phases:
-1. **Initial Hardware Profiling:** Static analysis of device specs via WebGL to calculate the initial `Tier` and populate the `HardwareSpecs` object.
-2. **Live V-Sync Degradation Monitoring:** Dynamic adjusting of performance tiers during runtime, with battery-saver detection logic.
+The HPOE algorithm ensures system stability and 60FPS maintenance via four sequential phases:
+1. **PHASE 1: ENVIRONMENT & HARDWARE PROFILING:** Static extraction of device specs via WebGL.
+2. **PHASE 2: HEURISTIC GPU CLASSIFICATION:** Massive matrix determining base theoretical tiers.
+3. **PHASE 3: SYSTEM LIMITS & SAFETY OVERRIDES:** Fallbacks punishing RAM limits and protecting mobile chips from thermal events.
+4. **PHASE 4: LIVE FPS PERFORMANCE MONITOR:** Dynamic adjusting of performance tiers during runtime, with battery-saver detection logic.
 
 ---
 
-## Phase 1: Initial Hardware Profiling
+## PHASE 1: ENVIRONMENT & HARDWARE PROFILING
 
 ```text
 FUNCTION InitializeProfiler():
@@ -33,11 +35,12 @@ FUNCTION InitializeProfiler():
         SET rendererString = SANITIZE(hardware identifier) // removes (R), (TM), "graphics", and lowercases
     CATCH:
         // Do nothing, variables remain unknown
-        
-    // -----------------------------------------------------------------
-    // MASSIVE HEURISTIC GPU CLASSIFICATION MATRIX
-    // -----------------------------------------------------------------
-    
+```
+
+---
+
+## PHASE 2: HEURISTIC GPU CLASSIFICATION
+```text
     // 1. APPLE SILICON & A-SERIES
     IF rendererString INCLUDES "apple":
         specs.vendor = "Apple"
@@ -161,10 +164,13 @@ FUNCTION InitializeProfiler():
         specs.architecture = "Unknown (Fallback)"
         specs.estimatedClass = "Budget/Legacy"
         calculatedTier = "low"
-        
-    // -----------------------------------------------------------------
-    // FAIL-SAFES AND THROTTLING RULES
-    // -----------------------------------------------------------------
+```
+
+---
+
+## PHASE 3: SYSTEM LIMITS & SAFETY OVERRIDES
+
+```text
     IF prefersReducedMotion == TRUE:
         calculatedTier = "low"
         
@@ -185,7 +191,7 @@ FUNCTION InitializeProfiler():
 
 ---
 
-## Phase 2: Live V-Sync Degradation Monitor
+## PHASE 4: LIVE FPS PERFORMANCE MONITOR
 
 ```text
 FUNCTION StartLiveDegradationMonitor(initialTier):
