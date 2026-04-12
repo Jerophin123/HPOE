@@ -42,7 +42,7 @@
 
 ## Executive Summary
 
-The **Heuristic Page Optimization Engine (HPOE)** is an enterprise-grade algorithm designed to solve a critical problem in modern graphical user interfaces: dynamically balancing ultra-premium visual effects (like nested CSS backdrop-filters, expensive WebGL shaders, particle simulations, and high-fidelity 3D assets) against the physical limitations of the user's hardware in real-time.
+The **Heuristic Page Optimization Engine (HPOE)** is an enterprise-grade algorithm developed and architected by Jerophin D R, designed to solve a critical problem in modern graphical user interfaces: dynamically balancing ultra-premium visual effects (like nested CSS backdrop-filters, expensive WebGL shaders, particle simulations, and high-fidelity 3D assets) against the physical limitations of the user's hardware in real-time.
 
 Too often, modern web applications dictate a "one size fits all" approach to UI. A visually stunning website with heavy glassmorphism might run flawlessly at a locked 60FPS on an M2 Apple Silicon running MacOS, but executing those same CSS `backdrop-filter: blur(20px)` commands over layered translucent elements on an older Android device (e.g., Mali-G72) will cause catastrophic frame drops, overheating, and massive input lag. Conversely, aggressively optimizing the UI down to flat colors and removing shadows across the board punishes high-end desktop users who paid for premium fidelity.
 
@@ -312,4 +312,4 @@ As GPUs aggressively evolve across diverse pipelines heavily utilizing Tensor Co
 ---
 **License**: MIT 
 **Copyright**: 2026 Delphin Associates
-**Author**: Engineering Team
+**Author**: Jerophin D R
