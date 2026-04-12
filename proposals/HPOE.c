@@ -13,7 +13,20 @@
 #include <ctype.h>
 
 typedef enum { TIER_HIGH, TIER_MID, TIER_LOW, TIER_VERY_LOW } HPOETier;
-typedef struct { HPOETier currentTier; int isMonitoring; int isMobile; } HPOEProfiler;
+
+typedef struct {
+    char vendor[32];
+    char architecture[64];
+    char type[32];
+    char estimatedClass[32];
+} HardwareSpecs;
+
+typedef struct { 
+    HPOETier currentTier; 
+    HardwareSpecs specs;
+    int isMonitoring; 
+    int isMobile; 
+} HPOEProfiler;
 
 int get_mock_core_count();
 void get_mock_gpu_string(char* buffer);
@@ -56,6 +69,11 @@ void hpoe_evaluate(HPOEProfiler* p) {
     int memoryGB = 16;
     int maxTextureSize = 8192;
     HPOETier calc = TIER_HIGH;
+    
+    strcpy(p->specs.vendor, "Unknown");
+    strcpy(p->specs.architecture, "Unknown");
+    strcpy(p->specs.type, "Unknown");
+    strcpy(p->specs.estimatedClass, "Unknown");
 
     // ---------------------------------------------------------
     // MASSIVE HEURISTIC GPU CLASSIFICATION MATRIX
@@ -63,69 +81,198 @@ void hpoe_evaluate(HPOEProfiler* p) {
 
     // 1. APPLE SILICON & A-SERIES
     if (strstr(gpu, "apple")) {
-        if (test_regex("m[1-9]", gpu)) calc = (strstr(gpu, "max") || strstr(gpu, "pro") || strstr(gpu, "ultra")) ? TIER_HIGH : TIER_MID;
-        else calc = (cores >= 6 && maxTextureSize >= 8192) ? TIER_HIGH : TIER_MID;
+        strcpy(p->specs.vendor, "Apple");
+        if (test_regex("m[1-9]", gpu)) {
+            strcpy(p->specs.architecture, "M-Series Silicon");
+            strcpy(p->specs.type, "Integrated");
+            if (strstr(gpu, "max") || strstr(gpu, "pro") || strstr(gpu, "ultra")) {
+                strcpy(p->specs.estimatedClass, "High-End");
+                calc = TIER_HIGH;
+            } else {
+                strcpy(p->specs.estimatedClass, "Mid-Range");
+                calc = TIER_MID;
+            }
+        } else {
+            strcpy(p->specs.architecture, "A-Series Silicon");
+            strcpy(p->specs.type, "Mobile");
+            if (cores >= 6 && maxTextureSize >= 8192) {
+                strcpy(p->specs.estimatedClass, "High-End");
+                calc = TIER_HIGH;
+            } else {
+                strcpy(p->specs.estimatedClass, "Mid-Range");
+                calc = TIER_MID;
+            }
+        }
     } 
     // 2. NVIDIA DESKTOP & LAPTOP
     else if (strstr(gpu, "nvidia") || strstr(gpu, "geforce") || strstr(gpu, "quadro")) {
-        if (test_regex("rtx\\s*[2-9][0-9]{3}", gpu) || strstr(gpu, "titan") || test_regex("quadro\\s*rtx", gpu)) calc = TIER_HIGH;
-        else if (test_regex("gtx\\s*(10[6-9][0-9]|16[5-9][0-9]|9[8-9][0-9])", gpu)) calc = TIER_HIGH;
-        else if (test_regex("gtx\\s*(1050|970|960|950|780)", gpu)) calc = TIER_MID;
-        else if (test_regex("gtx\\s*[456][0-9]{2}", gpu) || test_regex("gt\\s*[0-9]+", gpu) || test_regex("[7-9][1-4]0m", gpu) || test_regex("mx[1-4][0-9]{2}", gpu)) calc = TIER_LOW;
-        else calc = TIER_MID;
+        strcpy(p->specs.vendor, "NVIDIA");
+        strcpy(p->specs.type, "Discrete");
+        if (test_regex("rtx\\s*[2-9][0-9]{3}", gpu) || strstr(gpu, "titan") || test_regex("quadro\\s*rtx", gpu)) {
+            strcpy(p->specs.architecture, "RTX / Ampere / Ada / Turing");
+            strcpy(p->specs.estimatedClass, "High-End");
+            calc = TIER_HIGH;
+        } else if (test_regex("gtx\\s*(10[6-9][0-9]|16[5-9][0-9]|9[8-9][0-9])", gpu)) {
+            strcpy(p->specs.architecture, "GTX High/Mid");
+            strcpy(p->specs.estimatedClass, "High-End");
+            calc = TIER_HIGH;
+        } else if (test_regex("gtx\\s*(1050|970|960|950|780)", gpu)) {
+            strcpy(p->specs.architecture, "GTX Legacy Mid");
+            strcpy(p->specs.estimatedClass, "Mid-Range");
+            calc = TIER_MID;
+        } else if (test_regex("gtx\\s*[456][0-9]{2}", gpu) || test_regex("gt\\s*[0-9]+", gpu) || test_regex("[7-9][1-4]0m", gpu) || test_regex("mx[1-4][0-9]{2}", gpu)) {
+            strcpy(p->specs.architecture, "Legacy / Low-End Mobile");
+            strcpy(p->specs.estimatedClass, "Budget/Legacy");
+            calc = TIER_LOW;
+        } else {
+            strcpy(p->specs.architecture, "Unknown NVIDIA");
+            strcpy(p->specs.estimatedClass, "Mid-Range");
+            calc = TIER_MID;
+        }
     } 
     // 3. AMD RADEON
     else if (strstr(gpu, "amd") || strstr(gpu, "radeon")) {
-        if (test_regex("rx\\s*[5-8][0-9]{3}", gpu) || test_regex("vega\\s*(56|64)", gpu) || strstr(gpu, "radeon pro")) calc = TIER_HIGH;
-        else if (test_regex("rx\\s*(4[0-9]{2}|5[7-9][0-9])", gpu) || strstr(gpu, "660m") || strstr(gpu, "680m")) calc = TIER_MID;
-        else calc = TIER_LOW;
+        strcpy(p->specs.vendor, "AMD");
+        if (test_regex("rx\\s*[5-8][0-9]{3}", gpu) || test_regex("vega\\s*(56|64)", gpu) || strstr(gpu, "radeon pro")) {
+            strcpy(p->specs.architecture, "RDNA / High-End Vega");
+            strcpy(p->specs.type, "Discrete");
+            strcpy(p->specs.estimatedClass, "High-End");
+            calc = TIER_HIGH;
+        } else if (test_regex("rx\\s*(4[0-9]{2}|5[7-9][0-9])", gpu) || strstr(gpu, "660m") || strstr(gpu, "680m")) {
+            strcpy(p->specs.architecture, "Polaris / Modern APU");
+            strcpy(p->specs.type, "Integrated");
+            strcpy(p->specs.estimatedClass, "Mid-Range");
+            calc = TIER_MID;
+        } else {
+            strcpy(p->specs.architecture, "Legacy GCN or Budget APU");
+            strcpy(p->specs.type, "Integrated");
+            strcpy(p->specs.estimatedClass, "Budget/Legacy");
+            calc = TIER_LOW;
+        }
     } 
     // 4. INTEL GRAPHICS
     else if (strstr(gpu, "intel")) {
-        if (test_regex("arc\\s*a[3-7][0-9]{2}", gpu) || (strstr(gpu, "iris") && strstr(gpu, "xe")) || test_regex("iris\\s*(plus|pro)", gpu)) calc = TIER_MID;
-        else calc = TIER_LOW;
+        strcpy(p->specs.vendor, "Intel");
+        if (test_regex("arc\\s*a[3-7][0-9]{2}", gpu)) {
+            strcpy(p->specs.architecture, "Arc Alchemist");
+            strcpy(p->specs.type, "Discrete");
+            strcpy(p->specs.estimatedClass, "Mid-Range");
+            calc = TIER_MID;
+        } else if ((strstr(gpu, "iris") && strstr(gpu, "xe")) || test_regex("iris\\s*(plus|pro)", gpu)) {
+            strcpy(p->specs.architecture, "Iris Xe/Plus");
+            strcpy(p->specs.type, "Integrated");
+            strcpy(p->specs.estimatedClass, "Mid-Range");
+            calc = TIER_MID;
+        } else {
+            strcpy(p->specs.architecture, "UHD / HD Legacy");
+            strcpy(p->specs.type, "Integrated");
+            strcpy(p->specs.estimatedClass, "Budget/Legacy");
+            calc = TIER_LOW;
+        }
     } 
     // 5. QUALCOMM ADRENO / SNAPDRAGON (ANDROID)
     else if (strstr(gpu, "adreno") || strstr(gpu, "snapdragon")) {
+        strcpy(p->specs.vendor, "Qualcomm");
+        strcpy(p->specs.type, "Mobile");
         int series = 0;
         extract_series("adreno\\s*([0-9]{3})", gpu, &series);
-        if (series >= 800 || strstr(gpu, "snapdragon 8 elite") || strstr(gpu, "elite") || strstr(gpu, "snapdragon 8 gen")) calc = TIER_HIGH;
-        else if (series >= 650 || strstr(gpu, "snapdragon 8") || strstr(gpu, "snapdragon 7") || (series == 0 && cores >= 8 && maxTextureSize >= 8192) || strstr(gpu, "snapdragon")) calc = TIER_MID;
-        else calc = TIER_LOW;
+        if (series >= 800 || strstr(gpu, "snapdragon 8 elite") || strstr(gpu, "elite") || strstr(gpu, "snapdragon 8 gen")) {
+            sprintf(p->specs.architecture, series ? "Adreno %d" : "Snapdragon 8 Elite", series);
+            strcpy(p->specs.estimatedClass, "High-End");
+            calc = TIER_HIGH;
+        } else if (series >= 650 || strstr(gpu, "snapdragon 8") || strstr(gpu, "snapdragon 7") || (series == 0 && cores >= 8 && maxTextureSize >= 8192) || strstr(gpu, "snapdragon")) {
+            sprintf(p->specs.architecture, series ? "Adreno %d" : "Snapdragon 7/8", series);
+            strcpy(p->specs.estimatedClass, "Mid-Range");
+            calc = TIER_MID;
+        } else {
+            strcpy(p->specs.architecture, "Adreno Legacy");
+            strcpy(p->specs.estimatedClass, "Budget/Legacy");
+            calc = TIER_LOW;
+        }
     } 
     // 6. ARM MALI (ANDROID)
     else if (strstr(gpu, "mali")) {
-        if (strstr(gpu, "immortalis") || test_regex("g[7-9][1-9][0-9]", gpu) || test_regex("g7[7-9]", gpu)) calc = TIER_HIGH;
-        else if (test_regex("g[7-9][0-9]", gpu)) calc = TIER_MID;
-        else calc = TIER_LOW;
+        strcpy(p->specs.vendor, "ARM");
+        strcpy(p->specs.type, "Mobile");
+        if (strstr(gpu, "immortalis") || test_regex("g[7-9][1-9][0-9]", gpu) || test_regex("g7[7-9]", gpu)) {
+            strcpy(p->specs.architecture, "Mali Valhall / Immortalis");
+            strcpy(p->specs.estimatedClass, "High-End");
+            calc = TIER_HIGH;
+        } else if (test_regex("g[7-9][0-9]", gpu)) {
+            strcpy(p->specs.architecture, "Mali Valhall Mid");
+            strcpy(p->specs.estimatedClass, "Mid-Range");
+            calc = TIER_MID;
+        } else {
+            strcpy(p->specs.architecture, "Legacy Mali");
+            strcpy(p->specs.estimatedClass, "Budget/Legacy");
+            calc = TIER_LOW;
+        }
     } 
     // 7. SAMSUNG XCLIPSE / EXYNOS (MOBILE)
     else if (strstr(gpu, "xclipse") || strstr(gpu, "exynos")) {
+        strcpy(p->specs.vendor, "Samsung");
+        strcpy(p->specs.type, "Mobile");
         if (strstr(gpu, "xclipse")) {
             int series = 0;
             extract_series("xclipse\\s*([0-9]{3})", gpu, &series);
-            calc = (series >= 920) ? TIER_HIGH : TIER_MID;
-        } else calc = (cores >= 8 && maxTextureSize >= 8192) ? TIER_HIGH : TIER_LOW;
+            sprintf(p->specs.architecture, "Xclipse %d", series);
+            if (series >= 920) {
+                strcpy(p->specs.estimatedClass, "High-End");
+                calc = TIER_HIGH;
+            } else {
+                strcpy(p->specs.estimatedClass, "Mid-Range");
+                calc = TIER_MID;
+            }
+        } else {
+            if (cores >= 8 && maxTextureSize >= 8192) {
+                strcpy(p->specs.architecture, "Exynos Flagship");
+                strcpy(p->specs.estimatedClass, "High-End");
+                calc = TIER_HIGH;
+            } else {
+                strcpy(p->specs.architecture, "Exynos Legacy");
+                strcpy(p->specs.estimatedClass, "Budget/Legacy");
+                calc = TIER_LOW;
+            }
+        }
     } 
     // 8. MEDIATEK (DIMENSITY / HELIO)
     else if (strstr(gpu, "mediatek") || strstr(gpu, "dimensity") || strstr(gpu, "helio")) {
-        if (strstr(gpu, "dimensity 9") || strstr(gpu, "dimensity 8")) calc = TIER_HIGH;
-        else if (strstr(gpu, "dimensity") || strstr(gpu, "helio g9") || (cores >= 8 && maxTextureSize >= 8192)) calc = TIER_MID;
-        else calc = TIER_LOW;
+        strcpy(p->specs.vendor, "MediaTek");
+        strcpy(p->specs.type, "Mobile");
+        if (strstr(gpu, "dimensity 9") || strstr(gpu, "dimensity 8")) {
+            strcpy(p->specs.architecture, "Dimensity Flagship");
+            strcpy(p->specs.estimatedClass, "High-End");
+            calc = TIER_HIGH;
+        } else if (strstr(gpu, "dimensity") || strstr(gpu, "helio g9") || (cores >= 8 && maxTextureSize >= 8192)) {
+            strcpy(p->specs.architecture, "Dimensity/Helio High");
+            strcpy(p->specs.estimatedClass, "Mid-Range");
+            calc = TIER_MID;
+        } else {
+            strcpy(p->specs.architecture, "Helio Legacy");
+            strcpy(p->specs.estimatedClass, "Budget/Legacy");
+            calc = TIER_LOW;
+        }
     } 
     // 9. POWERVR / UNISOC / SPREADTRUM
     else if (strstr(gpu, "powervr") || strstr(gpu, "unisoc") || strstr(gpu, "spreadtrum") || strstr(gpu, "tigert")) {
+        strcpy(p->specs.vendor, "Other Mobile");
+        strcpy(p->specs.type, "Mobile");
+        strcpy(p->specs.architecture, "Legacy");
+        strcpy(p->specs.estimatedClass, "Budget/Legacy");
         calc = TIER_LOW;
     } 
     // 10. FALLBACK FOR UNKNOWN GPUs
-    else { calc = TIER_LOW; }
+    else { 
+        strcpy(p->specs.vendor, "Unknown");
+        strcpy(p->specs.architecture, "Unknown (Fallback)");
+        strcpy(p->specs.estimatedClass, "Budget/Legacy");
+        calc = TIER_LOW; 
+    }
 
-    // Hard limits and Accessibility Overrides
     if (cores <= 2 && memoryGB <= 2) calc = TIER_VERY_LOW;
-    else if (cores <= 2 || memoryGB <= 2) calc = TIER_LOW; // Only demote on extremely constrained hardware
-    else if (memoryGB <= 3 && calc == TIER_HIGH) calc = TIER_MID; // <=3GB memory can't sustain high-tier
+    else if (cores <= 2 || memoryGB <= 2) calc = TIER_LOW; 
+    else if (memoryGB <= 3 && calc == TIER_HIGH) calc = TIER_MID; 
     
-    // Absolute fail-safe: Mobile devices NEVER get "High" tier effects.
     if (p->isMobile && calc == TIER_HIGH) calc = TIER_MID;
 
     p->currentTier = calc;
@@ -133,12 +280,11 @@ void hpoe_evaluate(HPOEProfiler* p) {
 
 // ---------------------------------------------------------
 // LIVE V-SYNC DEGRADATION MONITOR (FPS SAFETY NET)
-// Tuned to avoid false-positive downgrades on mid-tier hardware
 // ---------------------------------------------------------
 void* degradation_monitor(void* arg) {
     HPOEProfiler* p = (HPOEProfiler*)arg;
     int sustained = 0;
-    int detected_baseline = 60; // Assume standard 60fps by default
+    int detected_baseline = 60; 
     int battery_saver_ticks = 0;
     int grace_ticks = 0;
     int measurements[5] = {0};
@@ -147,32 +293,28 @@ void* degradation_monitor(void* arg) {
     while (p->isMonitoring && p->currentTier != TIER_VERY_LOW && p->currentTier != TIER_LOW) {
         sleep(1); 
         int fps = get_mock_sys_fps();
-        int max_frame_delta = get_mock_max_frame_delta(); // Tracks maximum MS between consecutive frames
+        int max_frame_delta = get_mock_max_frame_delta(); 
 
         grace_ticks++;
         if (grace_ticks <= 3) {
-            // Wait for initial hydration to clear, then sample naturally achievable FPS
             if (grace_ticks > 1 && fps > 0 && m_count < 5) measurements[m_count++] = fps;
             continue;
         }
 
-        // Lock in baseline detection once grace period concludes
         if (m_count > 0 && detected_baseline == 60) {
             int sum = 0;
             for (int i = 0; i < m_count; i++) sum += measurements[i];
             double avg = (double)sum / m_count;
-            // Accurately verify 30fps: average ~30 AND frame pacing is universally stable
             if (avg >= 28 && avg <= 34 && max_frame_delta < 45) {
                 detected_baseline = 30;
             }
         }
 
-        // Dynamic MID-SESSION Battery Saver Detection
         if (detected_baseline == 60 && fps >= 28 && fps <= 33 && max_frame_delta < 45) {
             battery_saver_ticks++;
             if (battery_saver_ticks >= 2) {
                 detected_baseline = 30;
-                sustained = 0; // Wipe lag penalties incurred during the detection phase
+                sustained = 0; 
             }
         } else if (detected_baseline == 30 && fps >= 45) {
             detected_baseline = 60;
@@ -182,14 +324,13 @@ void* degradation_monitor(void* arg) {
             if (battery_saver_ticks > 0) battery_saver_ticks--;
         }
 
-        // Battery Saver Mode active: Re-assign threshold
         int floor = (detected_baseline == 30) ? ((p->currentTier == TIER_HIGH) ? 22 : 18) : ((p->currentTier == TIER_HIGH) ? 45 : 38);
         int limit = (p->currentTier == TIER_HIGH) ? 4 : 6;
 
         if (fps < floor) sustained++; else sustained = (sustained - 2 > 0) ? sustained - 2 : 0;
         if (sustained >= limit) {
             p->currentTier = (p->currentTier == TIER_HIGH) ? TIER_MID : TIER_LOW;
-            printf("[HPOE] Downgraded Tier.\n");
+            printf("[Hardware Profiler] Downgraded Tier.\n");
             sustained = 0;
         }
     }
