@@ -2,13 +2,16 @@ package hpoe
 
 /*
  * HPOE (Heuristic Page Optimization Engine) - Go Proposal
- * Excellent fit for continuous Goroutine monitoring.
+ * Full regex and mobile heuristics.
  */
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
+	"runtime"
 )
 
 type Tier string
@@ -25,40 +28,74 @@ type HPOE struct {
 	isMobile    bool
 }
 
-func NewHPOE() *HPOE {
-	h := &HPOE{CurrentTier: High, isMobile: false}
+func NewHPOE(isMobile bool) *HPOE {
+	h := &HPOE{isMobile: isMobile}
 	h.EvaluateHardware()
 	go h.monitorDegradation()
 	return h
 }
 
 func (h *HPOE) EvaluateHardware() {
-	gpuInfo := strings.ToLower(mockGetGpuString())
-	cores := mockGetCoreCount()
+	cores := runtime.NumCPU()
+	memoryGB := 16 // Mock OS memory
+	maxTextureSize := 8192 // Mock
+	
+	raw := strings.ToLower(mockGetGpuString())
+	reClean := regexp.MustCompile(`\((r|tm)\)|graphics`)
+	renderer := strings.TrimSpace(reClean.ReplaceAllString(raw, ""))
 
-	if strings.Contains(gpuInfo, "nvidia") || strings.Contains(gpuInfo, "rtx") {
-		h.CurrentTier = High
-	} else if strings.Contains(gpuInfo, "adreno") || strings.Contains(gpuInfo, "mali") {
-		h.CurrentTier = Mid
+	tier := High
+
+	has := func(s string) bool { return strings.Contains(renderer, s) }
+	match := func(pat string) bool { return regexp.MustCompile(pat).MatchString(renderer) }
+
+	// 1. APPLE
+	if has("apple") {
+		if match(`m[1-9]`) {
+			if has("max") || has("pro") || has("ultra") { tier = High } else { tier = Mid }
+		} else {
+			if cores >= 6 && maxTextureSize >= 8192 { tier = High } else { tier = Mid }
+		}
+	} else if has("nvidia") || has("geforce") || has("quadro") {
+		if match(`rtx\s*[2-9][0-9]{3}`) || has("titan") || match(`quadro\s*rtx`) { tier = High } else
+		if match(`gtx\s*(?:10[6-9][0-9]|16[5-9][0-9]|9[8-9][0-9])`) { tier = High } else
+		if match(`gtx\s*(?:1050|970|960|950|780)`) { tier = Mid } else
+		if match(`gtx\s*(?:4|5|6)[0-9]{2}`) || match(`gt\s*[0-9]+`) || match(`[7-9][1-4]0m`) || match(`mx[1-4][0-9]{2}`) { tier = Low } else { tier = Mid }
+	} else if has("amd") || has("radeon") {
+		if match(`rx\s*[5-8][0-9]{3}`) || match(`vega\s*(?:56|64)`) || has("radeon pro") { tier = High } else
+		if match(`rx\s*(?:4[0-9]{2}|5[7-9][0-9])`) || match(`6[6-9]0m`) { tier = Mid } else { tier = Low }
+	} else if has("intel") {
+		if match(`arc\s*a[3-7][0-9]{2}`) || (has("iris") && has("xe")) || match(`iris\s*(?:plus|pro)`) { tier = Mid } else { tier = Low }
+	} else if has("adreno") || has("snapdragon") {
+		reAdreno := regexp.MustCompile(`adreno\s*([0-9]{3})`)
+		series := 0
+		if m := reAdreno.FindStringSubmatch(renderer); len(m) > 1 { series, _ = strconv.Atoi(m[1]) }
+		if series >= 800 || has("snapdragon 8 elite") || has("elite") || has("snapdragon 8 gen") { tier = High } else
+		if series >= 650 || has("snapdragon 8") || has("snapdragon 7") || (series == 0 && cores >= 8 && maxTextureSize >= 8192) || has("snapdragon") { tier = Mid } else { tier = Low }
+	} else if has("mali") {
+		if has("immortalis") || match(`g[7-9][1-9][0-9]`) || match(`g7[7-9]`) { tier = High } else
+		if match(`g[7-9][0-9]`) { tier = Mid } else { tier = Low }
+	} else if has("xclipse") || has("exynos") {
+		if has("xclipse") {
+			series := 0
+			if m := regexp.MustCompile(`xclipse\s*([0-9]{3})`).FindStringSubmatch(renderer); len(m) > 1 { series, _ = strconv.Atoi(m[1]) }
+			if series >= 920 { tier = High } else { tier = Mid }
+		} else {
+			if cores >= 8 && maxTextureSize >= 8192 { tier = High } else { tier = Low }
+		}
+	} else if has("mediatek") || has("dimensity") || has("helio") {
+		if has("dimensity 9") || has("dimensity 8") { tier = High } else
+		if has("dimensity") || has("helio g9") || (cores >= 8 && maxTextureSize >= 8192) { tier = Mid } else { tier = Low }
 	} else {
-		h.CurrentTier = Low
+		tier = Low
 	}
 
-	if cores <= 2 {
-		h.CurrentTier = Low
-	}
-}
+	if cores <= 2 && memoryGB <= 2 { tier = VeryLow } else
+	if cores <= 2 || memoryGB <= 2 { tier = Low } else
+	if memoryGB <= 3 && tier == High { tier = Mid }
 
-func (h *HPOE) downgradeTier() {
-	switch h.CurrentTier {
-	case High:
-		h.CurrentTier = Mid
-	case Mid:
-		h.CurrentTier = Low
-	case Low:
-		h.CurrentTier = VeryLow
-	}
-	fmt.Printf("[HPOE] Emergency Thread Downgrade: %s\n", h.CurrentTier)
+	if h.isMobile && tier == High { tier = Mid }
+	h.CurrentTier = tier
 }
 
 func (h *HPOE) monitorDegradation() {
@@ -67,36 +104,22 @@ func (h *HPOE) monitorDegradation() {
 	sustainedDrops := 0
 
 	for range ticker.C {
-		if h.CurrentTier == VeryLow {
-			return
-		}
-
+		if h.CurrentTier == VeryLow || h.CurrentTier == Low { return }
 		fps := mockGetAppFps()
 		floor := 38
 		limit := 6
+		if h.CurrentTier == High { floor = 45; limit = 4 }
 
-		if h.CurrentTier == High {
-			floor = 45
-			limit = 4
+		if fps < floor { sustainedDrops++ } else {
+			if sustainedDrops-2 > 0 { sustainedDrops -= 2 } else { sustainedDrops = 0 }
 		}
-
-		if fps < floor {
-			sustainedDrops++
-		} else {
-			if sustainedDrops-2 > 0 {
-				sustainedDrops -= 2
-			} else {
-				sustainedDrops = 0
-			}
-		}
-
 		if sustainedDrops >= limit {
-			h.downgradeTier()
+			if h.CurrentTier == High { h.CurrentTier = Mid } else { h.CurrentTier = Low }
+			fmt.Printf("[HPOE] Emergency Thread Downgrade: %s\n", h.CurrentTier)
 			sustainedDrops = 0
 		}
 	}
 }
 
-func mockGetGpuString() string { return "Nvidia RTX" }
-func mockGetCoreCount() int    { return 12 }
+func mockGetGpuString() string { return "Nvidia RTX 4070" }
 func mockGetAppFps() int       { return 60 }

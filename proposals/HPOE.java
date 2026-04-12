@@ -1,16 +1,14 @@
 /**
  * HPOE (Heuristic Page Optimization Engine) - Java Proposal
- * Adapts matrix profiling and threading for desktop Java Apps.
+ * Implements full complex regex device classifications.
  */
+import java.util.regex.*;
 
 public class HPOE {
-    
-    public enum Tier {
-        HIGH, MID, LOW, VERY_LOW
-    }
+    public enum Tier { HIGH, MID, LOW, VERY_LOW }
 
     private Tier currentTier = Tier.HIGH;
-    private boolean isMobileDevice = false; // Mock OS evaluation
+    private boolean isMobileDevice = false;
 
     public HPOE() {
         evaluateSystemHardware();
@@ -20,47 +18,101 @@ public class HPOE {
     public void evaluateSystemHardware() {
         int coreCount = Runtime.getRuntime().availableProcessors();
         long memoryGB = Runtime.getRuntime().maxMemory() / (1024 * 1024 * 1024);
-        
-        String gpuVendor = getMockGpuVendorString().toLowerCase();
+        int maxTextureSize = 8192; // Mock WebGL metric
 
-        if (gpuVendor.contains("nvidia") || gpuVendor.contains("rtx")) {
-            currentTier = Tier.HIGH;
-        } else if (gpuVendor.contains("amd") || gpuVendor.contains("radeon")) {
-            currentTier = Tier.HIGH;
-        } else if (gpuVendor.contains("intel")) {
-            currentTier = Tier.MID;
+        String rawGpu = getMockGpuVendorString().toLowerCase();
+        String renderer = rawGpu.replaceAll("\\(r|tm\\)", "").replaceAll("graphics", "").trim();
+        Tier calculated = Tier.HIGH;
+
+        // 1. APPLE
+        if (renderer.contains("apple")) {
+            if (Pattern.compile("m[1-9]").matcher(renderer).find()) {
+                calculated = (renderer.contains("max") || renderer.contains("pro") || renderer.contains("ultra")) ? Tier.HIGH : Tier.MID;
+            } else {
+                calculated = (coreCount >= 6 && maxTextureSize >= 8192) ? Tier.HIGH : Tier.MID;
+            }
+        }
+        // 2. NVIDIA
+        else if (renderer.contains("nvidia") || renderer.contains("geforce") || renderer.contains("quadro")) {
+            if (Pattern.compile("rtx\\s*[2-9][0-9]{3}").matcher(renderer).find() || renderer.contains("titan") || Pattern.compile("quadro\\s*rtx").matcher(renderer).find()) calculated = Tier.HIGH;
+            else if (Pattern.compile("gtx\\s*(?:10[6-9][0-9]|16[5-9][0-9]|9[8-9][0-9])").matcher(renderer).find()) calculated = Tier.HIGH;
+            else if (Pattern.compile("gtx\\s*(?:1050|970|960|950|780)").matcher(renderer).find()) calculated = Tier.MID;
+            else if (Pattern.compile("gtx\\s*(?:4|5|6)[0-9]{2}").matcher(renderer).find() || Pattern.compile("gt\\s*[0-9]+").matcher(renderer).find() || Pattern.compile("[7-9][1-4]0m").matcher(renderer).find() || Pattern.compile("mx[1-4][0-9]{2}").matcher(renderer).find()) calculated = Tier.LOW;
+            else calculated = Tier.MID;
+        }
+        // 3. AMD
+        else if (renderer.contains("amd") || renderer.contains("radeon")) {
+            if (Pattern.compile("rx\\s*[5-8][0-9]{3}").matcher(renderer).find() || Pattern.compile("vega\\s*(?:56|64)").matcher(renderer).find() || renderer.contains("radeon pro")) calculated = Tier.HIGH;
+            else if (Pattern.compile("rx\\s*(?:4[0-9]{2}|5[7-9][0-9])").matcher(renderer).find() || Pattern.compile("6[6-9]0m").matcher(renderer).find()) calculated = Tier.MID;
+            else calculated = Tier.LOW;
+        }
+        // 4. INTEL
+        else if (renderer.contains("intel")) {
+            if (Pattern.compile("arc\\s*a[3-7][0-9]{2}").matcher(renderer).find() || (renderer.contains("iris") && renderer.contains("xe")) || Pattern.compile("iris\\s*(?:plus|pro)").matcher(renderer).find()) calculated = Tier.MID;
+            else calculated = Tier.LOW;
+        }
+        // 5. QUALCOMM
+        else if (renderer.contains("adreno") || renderer.contains("snapdragon")) {
+            Matcher m = Pattern.compile("adreno\\s*([0-9]{3})").matcher(renderer);
+            int series = (m.find()) ? Integer.parseInt(m.group(1)) : 0;
+            if (series >= 800 || renderer.contains("snapdragon 8 elite") || renderer.contains("elite")) calculated = Tier.HIGH;
+            else if (series >= 730 || renderer.contains("snapdragon 8 gen")) calculated = Tier.HIGH;
+            else if (series >= 650 || renderer.contains("snapdragon 8") || renderer.contains("snapdragon 7")) calculated = Tier.MID;
+            else if ((series == 0 && coreCount >= 8 && maxTextureSize >= 8192) || renderer.contains("snapdragon")) calculated = Tier.MID;
+            else calculated = Tier.LOW;
+        }
+        // 6. MALI
+        else if (renderer.contains("mali")) {
+            if (renderer.contains("immortalis") || Pattern.compile("g[7-9][1-9][0-9]").matcher(renderer).find() || Pattern.compile("g7[7-9]").matcher(renderer).find()) calculated = Tier.HIGH;
+            else if (Pattern.compile("g[7-9][0-9]").matcher(renderer).find()) calculated = Tier.MID;
+            else calculated = Tier.LOW;
+        }
+        // MISC MOBILE
+        else if (renderer.contains("xclipse") || renderer.contains("exynos")) {
+            Matcher m = Pattern.compile("xclipse\\s*([0-9]{3})").matcher(renderer);
+            if (m.find()) {
+                calculated = (Integer.parseInt(m.group(1)) >= 920) ? Tier.HIGH : Tier.MID;
+            } else {
+                calculated = (coreCount >= 8 && maxTextureSize >= 8192) ? Tier.HIGH : Tier.LOW;
+            }
+        }
+        else if (renderer.contains("mediatek") || renderer.contains("dimensity") || renderer.contains("helio")) {
+            if (renderer.contains("dimensity 9") || renderer.contains("dimensity 8")) calculated = Tier.HIGH;
+            else if (renderer.contains("dimensity") || renderer.contains("helio g9") || (coreCount >= 8 && maxTextureSize >= 8192)) calculated = Tier.MID;
+            else calculated = Tier.LOW;
+        }
+        else if (renderer.contains("powervr") || renderer.contains("unisoc") || renderer.contains("spreadtrum") || renderer.contains("tigert")) {
+            calculated = Tier.LOW;
         } else {
-            currentTier = Tier.LOW;
+            calculated = Tier.LOW;
         }
 
-        if (coreCount <= 2 || memoryGB <= 2) {
-            currentTier = Tier.LOW;
-        }
-        if (coreCount <= 2 && memoryGB <= 2) {
-            currentTier = Tier.VERY_LOW;
-        }
+        // Failsafes
+        if (coreCount <= 2 && memoryGB <= 2) calculated = Tier.VERY_LOW;
+        else if (coreCount <= 2 || memoryGB <= 2) calculated = Tier.LOW;
+        else if (memoryGB <= 3 && calculated == Tier.HIGH) calculated = Tier.MID;
+
+        if (isMobileDevice && calculated == Tier.HIGH) calculated = Tier.MID;
+
+        currentTier = calculated;
     }
 
     private void startPerformanceMonitor() {
-        Thread monitorThread = new Thread(() -> {
+        Thread t = new Thread(() -> {
             int sustainedDropTicks = 0;
-            
-            while (currentTier != Tier.VERY_LOW) {
+            while (currentTier != Tier.LOW && currentTier != Tier.VERY_LOW) {
                 try {
-                    Thread.sleep(1000); // 1-second ticks
-                    int mockFps = getMockSystemFps();
-                    
+                    Thread.sleep(1000);
+                    int fps = getMockSystemFps();
                     int floor = (currentTier == Tier.HIGH) ? 45 : 38;
-                    int requiredDrops = (currentTier == Tier.HIGH) ? 4 : 6;
+                    int limit = (currentTier == Tier.HIGH) ? 4 : 6;
 
-                    if (mockFps < floor) {
-                        sustainedDropTicks++;
-                    } else {
-                        sustainedDropTicks = Math.max(0, sustainedDropTicks - 2);
-                    }
+                    if (fps < floor) sustainedDropTicks++;
+                    else sustainedDropTicks = Math.max(0, sustainedDropTicks - 2);
 
-                    if (sustainedDropTicks >= requiredDrops) {
-                        downgradeTier();
+                    if (sustainedDropTicks >= limit) {
+                        currentTier = (currentTier == Tier.HIGH) ? Tier.MID : Tier.LOW;
+                        System.out.println("[HPOE] Emergency downgrading tier.");
                         sustainedDropTicks = 0;
                     }
                 } catch (InterruptedException e) {
@@ -69,24 +121,10 @@ public class HPOE {
                 }
             }
         });
-        monitorThread.setDaemon(true);
-        monitorThread.start();
+        t.setDaemon(true);
+        t.start();
     }
 
-    private void downgradeTier() {
-        if (currentTier == Tier.HIGH) currentTier = Tier.MID;
-        else if (currentTier == Tier.MID) currentTier = Tier.LOW;
-        else if (currentTier == Tier.LOW) currentTier = Tier.VERY_LOW;
-        System.out.println("[HPOE] Emergency Downgrade to: " + currentTier.name());
-    }
-
-    private String getMockGpuVendorString() {
-        // In reality, Use LWJGL or System.getProperty equivalent
-        return "NVIDIA RTX 3080";
-    }
-
-    private int getMockSystemFps() {
-        // Mocks a rendering backend framerate fetch
-        return 60;
-    }
+    private String getMockGpuVendorString() { return "NVIDIA GeForce RTX 4070 Ti"; }
+    private int getMockSystemFps() { return 60; }
 }
