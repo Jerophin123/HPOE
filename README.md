@@ -92,7 +92,7 @@ graph TD
     D --> F[Phase 3: System Limits & Safety Overrides]
     E --> F
     F -->|Mobile Device Detected| G[Force Cap to Mid]
-    F -->|Constrained RAM < 4GB| H[Force Cap to Mid/Low]
+    F -->|Constrained RAM < 3GB or CPU < 3 Cores| H[Force Cap to Very Low]
     F -->|Accessibility Requested| I[Force Cap to Low]
     
     G --> J[Mount UI Frame with Base Details]
@@ -188,8 +188,7 @@ Crucial to the Android market share. HPOE attempts to extract the numerical patt
 ## Deep Dive Phase 3: SYSTEM LIMITS & SAFETY OVERRIDES
 
 Post-heuristic analysis, overrides determine rigid constraints:
-- Systems under `3GB` of system RAM mechanically cannot cache the necessary browser buffers required for heavy graphical lifting. They are banned from `High`.
-- Devices executing off 2 memory threads or possessing less than 2 physical CPU cores are universally set to `Very Low`, assuming massive legacy conditions or extreme hardware starvation.
+- Systems under `3GB` of system RAM or possessing fewer than `3` physical CPU cores are fundamentally banned from `High`, `Mid`, and `Low` tiers. They are universally pushed directly to `Very Low`, assuming massive legacy conditions, memory starvation, or extreme hardware constraints.
 
 ---
 
