@@ -9,7 +9,7 @@
 1. [Executive Summary](#executive-summary)
 2. [The Core Philosophy](#the-core-philosophy)
    - [The Aesthetics vs. Performance Dilemma](#the-aesthetics-vs-performance-dilemma)
-   - [The 60FPS Mandate](#the-60fps-mandate)
+   - [The 60+ FPS Mandate](#the-60+ FPS-mandate)
    - [The Mobile Thermal Cap](#the-mobile-thermal-cap)
 3. [System Architecture Overview](#system-architecture-overview)
 4. [Deep Dive Phase 1: ENVIRONMENT & HARDWARE PROFILING](#deep-dive-phase-1-environment--hardware-profiling)
@@ -44,7 +44,7 @@
 
 The **Heuristic Page Optimization Engine (HPOE)** is an enterprise-grade algorithm developed and architected by Jerophin D R, designed to solve a critical problem in modern graphical user interfaces: dynamically balancing ultra-premium visual effects (like nested CSS backdrop-filters, expensive WebGL shaders, particle simulations, and high-fidelity 3D assets) against the physical limitations of the user's hardware in real-time.
 
-Too often, modern web applications dictate a "one size fits all" approach to UI. A visually stunning website with heavy glassmorphism might run flawlessly at a locked 60FPS on an M2 Apple Silicon running MacOS, but executing those same CSS `backdrop-filter: blur(20px)` commands over layered translucent elements on an older Android device (e.g., Mali-G72) will cause catastrophic frame drops, overheating, and massive input lag. Conversely, aggressively optimizing the UI down to flat colors and removing shadows across the board punishes high-end desktop users who paid for premium fidelity.
+Too often, modern web applications dictate a "one size fits all" approach to UI. A visually stunning website with heavy glassmorphism might run flawlessly at a locked 60+ FPS on an M2 Apple Silicon running MacOS, but executing those same CSS `backdrop-filter: blur(20px)` commands over layered translucent elements on an older Android device (e.g., Mali-G72) will cause catastrophic frame drops, overheating, and massive input lag. Conversely, aggressively optimizing the UI down to flat colors and removing shadows across the board punishes high-end desktop users who paid for premium fidelity.
 
 **HPOE bridges this gap autonomously.** It is a self-adjusting, reactive profiler that runs invisibly alongside the application runtime. 
 
@@ -69,8 +69,8 @@ HPOE explicitly defines **four tiers of performance**:
 - **`Low`**: Solid colors replacing blurs, minimal shadows, standard animations. 
 - **`Very Low`**: Pure static layouts, stripped of animations entirely. Fallback mode.
 
-### The 60FPS Mandate
-Interaction costs latency. If a user clicks a button, hover effects must trigger instantly. Scrolling must not stutter. HPOE fundamentally prioritizes **Input Responsiveness** over visual fidelity. If maintaining a blur causes the page to scroll at 40FPS, HPOE determines that the blur is a failure condition and will mercilessly strip it from the UI to restore 60FPS. 
+### The 60+ FPS Mandate
+Interaction costs latency. If a user clicks a button, hover effects must trigger instantly. Scrolling must not stutter. HPOE fundamentally prioritizes **Input Responsiveness** over visual fidelity. If maintaining a blur causes the page to scroll at 40FPS, HPOE determines that the blur is a failure condition and will mercilessly strip it from the UI to restore 60+ FPS. 
 
 ### The Mobile Thermal Cap
 Smartphones lack active cooling fans. A flagship processor like the Snapdragon 8 Elite intrinsically possesses graphical benchmarks that rival high-end laptops. Thus, from a purely analytical perspective, it *can* calculate multiple stacking blurs perfectly.
@@ -203,7 +203,7 @@ Phase 4 answers: *"Is this machine currently dying from rendering this? "*
 ### The Measurement Loop
 The engine mounts an isolated asynchronous loop mapping to `requestAnimationFrame` (in TS/JS/Dart environments) or executing in dedicated concurrent threads tracing frame pacing logic in native runtime (Go, Rust, C++). 
 It isolates exactly how many frames achieve calculation within a 1s (1000ms) interval. 
-- 60 Frames rendered in 1 second = Perfect performance.
+- 60+ Frames rendered in 1 second = Perfect performance.
 - 12 Frames rendered in 1 second = Stuttering instability.
 
 ### Grace Periods & Hydration Tolerance
@@ -212,7 +212,7 @@ To prevent immediate false-positive downgrades, Phase 4 implements a rigid **300
 
 ### Frame Pacing & Jitter Mechanics
 Instead of just counting FPS, the loop records `maxFrameDelta` tracking the maximum millisecond latency between any two consecutive frames.
-Why? Because an engine drawing 30FPS might be running perfectly smoothly, or it might be running 60fps for half a second, completely freezing up for 400ms, and rendering the rest to result in an average "30".
+Why? Because an engine drawing 30FPS might be running perfectly smoothly, or it might be running 60+ FPS for half a second, completely freezing up for 400ms, and rendering the rest to result in an average "30".
 Jitter (wild spikes in `maxFrameDelta`) signifies catastrophic software lag, not reliable hardware limitations.
 
 ### High Refresh Rate & Advanced Battery Saver Logic
@@ -243,7 +243,7 @@ Only when sustained drops violate the ceiling logic (For High, limits to 4 conse
 
 ### Scenario A: The M1 Max MacBook Pro
 **Device:** Desktop Safari on an M1 Max Chip.
-**Execution Flow:** Regex hits `apple` and hits `m1` and hits `max`. Calculates to `High-End Architecture`. RAM and core limits securely pass. The resulting object caches `Tier: High`. UI paints thick multi-layer blurs and particles perfectly. Live Monitor sustains 60 FPS smoothly. Algorithm sleeps efficiently in backgrounds reporting no errors. 
+**Execution Flow:** Regex hits `apple` and hits `m1` and hits `max`. Calculates to `High-End Architecture`. RAM and core limits securely pass. The resulting object caches `Tier: High`. UI paints thick multi-layer blurs and particles perfectly. Live Monitor sustains 60+ FPS smoothly. Algorithm sleeps efficiently in backgrounds reporting no errors. 
 
 ### Scenario B: Mid-Range Android entering Battery Saver
 **Device:** Samsung Galaxy A54 running Mali graphics on 20% Battery.
@@ -253,12 +253,12 @@ The Android OS applies a 30 Hz output mode to prevent shutting down at low-batte
 ### Scenario C: The Unknown Budget Desktop
 **Device:** A corporate Dell machine running a highly outdated, obscure integrated graphics variant.
 **Execution Flow:** String logic hits completely unknown entities. Fails validation trees. Calculates explicitly to fallback mode, tracking the entity securely as `Unknown Fallback`. Drops immediately to `Low` Tier securing flat layout UI mechanics preserving user's business usage integrity over visual flair.
-Monitor verifies baseline stable tracking smoothly due to stripped effects resolving solid 60FPS responses smoothly ensuring application integrity. 
+Monitor verifies baseline stable tracking smoothly due to stripped effects resolving solid 60+ FPS responses smoothly ensuring application integrity. 
 
 ### Scenario D: Snapdragon 8 Elite Under Heavy Thermal Load
 **Device:** Brand new Asus ROG Phone with active tracking, user has been playing intense 3D apps prior. 
 **Execution Flow:** Recognizes `Snapdragon 8 Elite`. Resolves architecture seamlessly, mathematically flagging it as Flagship class. Crucially: Recognizes `isMobileDevice = true`. Enforces physical hardware law restricting processing load down to `Tier: Mid`.
-While phone runs at `Mid`, the intense ambient thermal loads derived from previous user actions trigger physical kernel-level CPU throttling after 40 seconds. Frames suddenly buckle heavily diving from 60FPS down to wildly stuttering 23 FPS measurements alongside massive Frame Delta spacing. HPOE calculates sustained drop markers `+1, +2, +3`. Upon failing the safety boundaries, it fires an explicit warning log terminating `Mid` tier logic down to `Low`. The layout flattens dynamically and within 30 seconds the device sheds 10C worth of ambient temperature preventing critical failures.
+While phone runs at `Mid`, the intense ambient thermal loads derived from previous user actions trigger physical kernel-level CPU throttling after 40 seconds. Frames suddenly buckle heavily diving from 60+ FPS down to wildly stuttering 23 FPS measurements alongside massive Frame Delta spacing. HPOE calculates sustained drop markers `+1, +2, +3`. Upon failing the safety boundaries, it fires an explicit warning log terminating `Mid` tier logic down to `Low`. The layout flattens dynamically and within 30 seconds the device sheds 10C worth of ambient temperature preventing critical failures.
 
 ### Scenario E: High-End Desktop with 144Hz Gaming Monitor
 **Device:** RTX 4080 Desktop PC running Chrome at 144Hz.
@@ -266,7 +266,7 @@ While phone runs at `Mid`, the intense ambient thermal loads derived from previo
 
 ### Scenario F: Next.js Initial Application Hydration
 **Device:** Powerful Desktop PC loading a heavily server-side rendered application.
-**Execution Flow:** During the first 1500ms of loading, massive React Javascript bundles are executed. Client-side hydration causes the main browser thread to freeze completely for 400ms. If HPOE monitored this instantly, the measured FPS would plummet to 12 FPS, forcing a brutal `Low` tier downgrade. However, the **3000ms Grace Period** shields the engine explicitly. The massive frame-delta skips are entirely ignored. Hydration finishes softly, the app hits a smooth 60FPS lock, and HPOE continues verifying `High` tier performance accurately.
+**Execution Flow:** During the first 1500ms of loading, massive React Javascript bundles are executed. Client-side hydration causes the main browser thread to freeze completely for 400ms. If HPOE monitored this instantly, the measured FPS would plummet to 12 FPS, forcing a brutal `Low` tier downgrade. However, the **3000ms Grace Period** shields the engine explicitly. The massive frame-delta skips are entirely ignored. Hydration finishes softly, the app hits a smooth 60+ FPS lock, and HPOE continues verifying `High` tier performance accurately.
 
 ### Scenario G: Legacy Hardware under Extreme Resource Starvation
 **Device:** Old Windows 10 Tablet with 2GB of RAM and an Intel Atom dual-core CPU.
@@ -283,6 +283,24 @@ While phone runs at `Mid`, the intense ambient thermal loads derived from previo
 ### Scenario J: Unknown GPU with Flagship Auxiliaries
 **Device:** An entirely obscure or brand-new high-end desktop AI accelerator/GPU untracked in the classification matrix.
 **Execution Flow:** The WebGL regex drops out generating `Unknown Fallback`. Standard execution maps to `Low` to protect the ecosystem. However, HPOE interrogates the auxiliary specs and discovers 16 CPU Cores alongside `16GB+` of memory accompanied by 16384px texture max limits. Instead of aggressively restricting the unknown modern hardware, it intelligently bypasses the `Low` drop, gracefully upscaling the fallback and assigning it cautiously to `Tier: Mid`. The user experiences partial premium features while retaining absolute protection against arbitrary graphic faults.
+
+---
+
+## Algorithmic Complexity (Big O)
+
+HPOE is designed to operate purely in the background with mathematically negligible overhead. Its processing footprint guarantees zero interference with the host application's primary thread execution.
+
+### Phase 1 - 3: Heuristic Classification
+- **Time Complexity: O(M)**
+  Where `M` is the character length of the target hardware string (typically `< 50 chars`). The engine systematically evaluates the string utilizing highly optimized bounding constraints. In practical limits, this evaluates immediately as **O(1) Constant Time**.
+- **Space Complexity: O(1)**
+  The algorithm utilizes strictly bound, primitive local assignments for extracting specifications. No dynamic heap allocations or variable array scaling occurs; therefore, memory mapping holds absolutely constant.
+
+### Phase 4: Live V-Sync Degradation Monitor
+- **Time Complexity: O(1) Per Frame**
+  The monitor isolates a simple integer increment `+1` per frame delta hook. The 1000ms threshold check executes pure primitive conditional arithmetic evaluating `baseline` and `dropTicks` identically in static bounds.
+- **Space Complexity: O(1)**
+  Only tracks variables like `frameCount`, `maxFrameDelta`, `sustainedDropTicks`, and a fixed-length `BaselineArray` holding maximum 3 integers during the brief 3000ms Grace Period. After Grace Period conclusion, array polling ceases definitively, resulting in flat zero-scale memory persistence.
 
 ---
 
@@ -339,7 +357,7 @@ Ensure UI styling cascades utilize root directives effectively relying heavily o
 
 ## Conclusion & Future Scaling
 
-HPOE structurally redefines visual integrity inside highly volatile digital environments implementing safety rails previously reserved natively strictly for specialized game engine systems. By enforcing multi-layered redundant tracking isolating strict empirical data analytics processing frame logic against physical kernel-level hardware tracking schemas, the application structurally protects user hardware generating unparalleled responsiveness rendering 60FPS fluid functionality securely protecting physical assets effectively providing an exceptionally reliable premium user experience cross-platform universally. 
+HPOE structurally redefines visual integrity inside highly volatile digital environments implementing safety rails previously reserved natively strictly for specialized game engine systems. By enforcing multi-layered redundant tracking isolating strict empirical data analytics processing frame logic against physical kernel-level hardware tracking schemas, the application structurally protects user hardware generating unparalleled responsiveness rendering 60+ FPS fluid functionality securely protecting physical assets effectively providing an exceptionally reliable premium user experience cross-platform universally. 
 
 As GPUs aggressively evolve across diverse pipelines heavily utilizing Tensor Cores/NPU machine-learning accelerators processing AI computations rapidly disrupting visual boundaries, HPOE's structural matrices dynamically guarantee scalability ensuring accurate mapping evaluating logic maintaining performance across next-generation infrastructures precisely.
 
