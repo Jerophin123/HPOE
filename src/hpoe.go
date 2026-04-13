@@ -253,7 +253,7 @@ func (h *HPOE) EvaluateHardware() {
 	}
 
 	// Hard limits and Accessibility Overrides
-	if cores <= 2 && memoryGB <= 2 { tier = VeryLow } else
+	if cores < 3 && memoryGB < 3 { tier = VeryLow } else
 	if cores <= 2 || memoryGB <= 2 { tier = Low } else 
 	if memoryGB <= 3 && tier == High { tier = Mid } 
 
@@ -272,6 +272,7 @@ func (h *HPOE) monitorDegradation() {
 	detectedBaseline := 60 
 	batterySaverTicks := 0
 	graceTicks := 0
+	isBaselineLocked := false
 	var measurements []int
 
 	for range ticker.C {
@@ -286,33 +287,38 @@ func (h *HPOE) monitorDegradation() {
 			continue
 		}
 
-		if len(measurements) > 0 && detectedBaseline == 60 {
+		if len(measurements) > 0 && !isBaselineLocked {
 			sum := 0
 			for _, m := range measurements { sum += m }
 			avg := float64(sum) / float64(len(measurements))
-			if avg >= 28 && avg <= 34 && maxFrameDelta < 45 { detectedBaseline = 30 }
+			if avg > 65 {
+				detectedBaseline = int(avg + 0.5)
+			} else if avg >= 28 && avg <= 34 && maxFrameDelta < 45 {
+				detectedBaseline = 30
+			} else {
+				detectedBaseline = 60
+			}
+			isBaselineLocked = true
 		}
 
-		if detectedBaseline == 60 && fps >= 28 && fps <= 33 && maxFrameDelta < 45 {
+		if detectedBaseline >= 60 && fps >= 28 && fps <= 33 && maxFrameDelta < 45 {
 			batterySaverTicks++
 			if batterySaverTicks >= 2 {
 				detectedBaseline = 30
 				sustainedDrops = 0 
 			}
 		} else if detectedBaseline == 30 && fps >= 45 {
-			detectedBaseline = 60
+			if fps > 65 { detectedBaseline = fps } else { detectedBaseline = 60 }
 			sustainedDrops = 0
 			batterySaverTicks = 0
-		} else if detectedBaseline == 60 && (fps < 28 || fps > 33 || maxFrameDelta >= 45) {
+		} else if detectedBaseline >= 60 && (fps < 28 || fps > 33 || maxFrameDelta >= 45) {
 			if batterySaverTicks > 0 { batterySaverTicks-- }
 		}
 
-		floor := 38
-		limit := 6
+		floor := 40
+		limit := 3
 		if detectedBaseline == 30 {
-			if h.CurrentTier == High { floor = 22 } else { floor = 18 }
-		} else {
-			if h.CurrentTier == High { floor = 45; limit = 4 }
+			floor = 22
 		}
 
 		if fps < floor { sustainedDrops++ } else {

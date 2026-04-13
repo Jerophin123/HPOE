@@ -221,8 +221,8 @@ class HPOE {
       calc = HpoeTier.low; 
     }
 
-    if (cores <= 2 && memoryGB <= 2) calc = HpoeTier.veryLow;
-    else if (cores <= 2 || memoryGB <= 2) calc = HpoeTier.low; 
+    if (cores < 3 && memoryGB < 3) calc = HpoeTier.veryLow;
+     
     else if (memoryGB <= 3 && calc == HpoeTier.high) calc = HpoeTier.mid; 
 
     if (isMobile && calc == HpoeTier.high) calc = HpoeTier.mid;
@@ -238,6 +238,7 @@ class HPOE {
     int detectedBaseline = 60; 
     int batterySaverTicks = 0;
     int graceTicks = 0;
+    bool isBaselineLocked = false;
     List<int> measurements = [];
 
     _monitorTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -252,29 +253,34 @@ class HPOE {
         return;
       }
 
-      if (measurements.isNotEmpty && detectedBaseline == 60) {
+      if (measurements.isNotEmpty && !isBaselineLocked) {
         double avg = measurements.reduce((a, b) => a + b) / measurements.length;
-        if (avg >= 28 && avg <= 34 && maxFrameDelta < 45) {
+        if (avg > 65) {
+          detectedBaseline = avg.round();
+        } else if (avg >= 28 && avg <= 34 && maxFrameDelta < 45) {
           detectedBaseline = 30;
+        } else {
+          detectedBaseline = 60;
         }
+        isBaselineLocked = true;
       }
 
-      if (detectedBaseline == 60 && fps >= 28 && fps <= 33 && maxFrameDelta < 45) {
+      if (detectedBaseline >= 60 && fps >= 28 && fps <= 33 && maxFrameDelta < 45) {
         batterySaverTicks++;
         if (batterySaverTicks >= 2) {
           detectedBaseline = 30;
           sustainedDrops = 0; 
         }
       } else if (detectedBaseline == 30 && fps >= 45) {
-        detectedBaseline = 60;
+        detectedBaseline = (fps > 65) ? fps : 60;
         sustainedDrops = 0;
         batterySaverTicks = 0;
-      } else if (detectedBaseline == 60 && (fps < 28 || fps > 33 || maxFrameDelta >= 45)) {
+      } else if (detectedBaseline >= 60 && (fps < 28 || fps > 33 || maxFrameDelta >= 45)) {
         batterySaverTicks = max(0, batterySaverTicks - 1);
       }
 
-      int floor = (detectedBaseline == 30) ? ((currentTier == HpoeTier.high) ? 22 : 18) : ((currentTier == HpoeTier.high) ? 45 : 38);
-      int limit = (currentTier == HpoeTier.high) ? 4 : 6;
+      int floor = (detectedBaseline == 30) ? 22 : 40;
+      int limit = 3;
 
       if (fps < floor) sustainedDrops++; else sustainedDrops = max(0, sustainedDrops - 2);
       

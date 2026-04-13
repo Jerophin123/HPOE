@@ -269,8 +269,8 @@ void hpoe_evaluate(HPOEProfiler* p) {
         calc = TIER_LOW; 
     }
 
-    if (cores <= 2 && memoryGB <= 2) calc = TIER_VERY_LOW;
-    else if (cores <= 2 || memoryGB <= 2) calc = TIER_LOW; 
+    if (cores < 3 && memoryGB < 3) calc = TIER_VERY_LOW;
+     
     else if (memoryGB <= 3 && calc == TIER_HIGH) calc = TIER_MID; 
     
     if (p->isMobile && calc == TIER_HIGH) calc = TIER_MID;
@@ -287,6 +287,7 @@ void* degradation_monitor(void* arg) {
     int detected_baseline = 60; 
     int battery_saver_ticks = 0;
     int grace_ticks = 0;
+    int is_baseline_locked = 0;
     int measurements[5] = {0};
     int m_count = 0;
 
@@ -301,31 +302,36 @@ void* degradation_monitor(void* arg) {
             continue;
         }
 
-        if (m_count > 0 && detected_baseline == 60) {
+        if (m_count > 0 && !is_baseline_locked) {
             int sum = 0;
             for (int i = 0; i < m_count; i++) sum += measurements[i];
             double avg = (double)sum / m_count;
-            if (avg >= 28 && avg <= 34 && max_frame_delta < 45) {
+            if (avg > 65) {
+                detected_baseline = (int)(avg + 0.5);
+            } else if (avg >= 28 && avg <= 34 && max_frame_delta < 45) {
                 detected_baseline = 30;
+            } else {
+                detected_baseline = 60;
             }
+            is_baseline_locked = 1;
         }
 
-        if (detected_baseline == 60 && fps >= 28 && fps <= 33 && max_frame_delta < 45) {
+        if (detected_baseline >= 60 && fps >= 28 && fps <= 33 && max_frame_delta < 45) {
             battery_saver_ticks++;
             if (battery_saver_ticks >= 2) {
                 detected_baseline = 30;
                 sustained = 0; 
             }
         } else if (detected_baseline == 30 && fps >= 45) {
-            detected_baseline = 60;
+            detected_baseline = (fps > 65) ? fps : 60;
             sustained = 0;
             battery_saver_ticks = 0;
-        } else if (detected_baseline == 60 && (fps < 28 || fps > 33 || max_frame_delta >= 45)) {
+        } else if (detected_baseline >= 60 && (fps < 28 || fps > 33 || max_frame_delta >= 45)) {
             if (battery_saver_ticks > 0) battery_saver_ticks--;
         }
 
-        int floor = (detected_baseline == 30) ? ((p->currentTier == TIER_HIGH) ? 22 : 18) : ((p->currentTier == TIER_HIGH) ? 45 : 38);
-        int limit = (p->currentTier == TIER_HIGH) ? 4 : 6;
+        int floor = (detected_baseline == 30) ? 22 : 40;
+        int limit = 3;
 
         if (fps < floor) sustained++; else sustained = (sustained - 2 > 0) ? sustained - 2 : 0;
         if (sustained >= limit) {

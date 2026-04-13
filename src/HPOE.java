@@ -239,8 +239,8 @@ public class HPOE {
         }
 
         // Hard limits and Accessibility Overrides
-        if (coreCount <= 2 && memoryGB <= 2) calculated = Tier.VERY_LOW;
-        else if (coreCount <= 2 || memoryGB <= 2) calculated = Tier.LOW;
+        if (coreCount < 3 && memoryGB < 3) calculated = Tier.VERY_LOW;
+        
         else if (memoryGB <= 3 && calculated == Tier.HIGH) calculated = Tier.MID;
         
         // Absolute fail-safe: Mobile devices NEVER get "High" tier effects.
@@ -258,6 +258,7 @@ public class HPOE {
             int detectedBaselineFps = 60;
             int batterySaverTicks = 0;
             int gracePeriodTicks = 0;
+            boolean isBaselineLocked = false;
             List<Integer> baselineMeasurements = new ArrayList<>();
 
             while (currentTier != Tier.LOW && currentTier != Tier.VERY_LOW) {
@@ -272,29 +273,34 @@ public class HPOE {
                         continue;
                     }
 
-                    if (baselineMeasurements.size() > 0 && detectedBaselineFps == 60) {
+                    if (baselineMeasurements.size() > 0 && !isBaselineLocked) {
                         double avg = baselineMeasurements.stream().mapToInt(val -> val).average().orElse(0.0);
-                        if (avg >= 28 && avg <= 34 && maxFrameDelta < 45) {
+                        if (avg > 65) {
+                            detectedBaselineFps = (int) Math.round(avg);
+                        } else if (avg >= 28 && avg <= 34 && maxFrameDelta < 45) {
                             detectedBaselineFps = 30;
+                        } else {
+                            detectedBaselineFps = 60;
                         }
+                        isBaselineLocked = true;
                     }
 
-                    if (detectedBaselineFps == 60 && fps >= 28 && fps <= 33 && maxFrameDelta < 45) {
+                    if (detectedBaselineFps >= 60 && fps >= 28 && fps <= 33 && maxFrameDelta < 45) {
                         batterySaverTicks++;
                         if (batterySaverTicks >= 2) {
                             detectedBaselineFps = 30;
                             sustainedDropTicks = 0;
                         }
                     } else if (detectedBaselineFps == 30 && fps >= 45) {
-                        detectedBaselineFps = 60;
+                        detectedBaselineFps = (fps > 65) ? Math.round(fps) : 60;
                         sustainedDropTicks = 0;
                         batterySaverTicks = 0;
-                    } else if (detectedBaselineFps == 60 && (fps < 28 || fps > 33 || maxFrameDelta >= 45)) {
+                    } else if (detectedBaselineFps >= 60 && (fps < 28 || fps > 33 || maxFrameDelta >= 45)) {
                         batterySaverTicks = Math.max(0, batterySaverTicks - 1);
                     }
 
-                    int floor = (detectedBaselineFps == 30) ? ((currentTier == Tier.HIGH) ? 22 : 18) : ((currentTier == Tier.HIGH) ? 45 : 38);
-                    int limit = (currentTier == Tier.HIGH) ? 4 : 6;
+                    int floor = (detectedBaselineFps == 30) ? 22 : 40;
+                    int limit = 3;
 
                     if (fps < floor) sustainedDropTicks++;
                     else sustainedDropTicks = Math.max(0, sustainedDropTicks - 2);

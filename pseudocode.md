@@ -214,32 +214,37 @@ FUNCTION StartLiveDegradationMonitor(initialTier):
                 IF past 1000ms and currentFPS > 0:
                     RECORD currentFPS to BaselineArray
             ELSE:
-                // Lock in initial Battery Saver / 30Hz Screen Detection
-                IF BaselineArray NOT EMPTY AND detectedBaselineFps == 60:
+                // Lock in initial High Refresh / 60Hz / 30Hz Boundary Detection
+                IF BaselineArray NOT EMPTY AND isBaselineLocked == FALSE:
                     SET averageFPS = AVERAGE(BaselineArray)
-                    IF averageFPS between 28-34 AND maxFrameDelta < 45ms:
+                    IF averageFPS > 65:
+                        detectedBaselineFps = ROUND(averageFPS) // E.g., 120Hz/144Hz uncapped
+                    ELSE IF averageFPS between 28-34 AND maxFrameDelta < 45ms:
                         detectedBaselineFps = 30
+                    ELSE:
+                        detectedBaselineFps = 60
+                    isBaselineLocked = TRUE
                     
                 // Dynamic Mid-Session Battery Saver Adjustments
-                IF currently 60Hz AND detected drops stabilizing around 30Hz without jitter (<45ms delta):
+                IF detectedBaselineFps >= 60 AND detected drops stabilizing around 30Hz without jitter (<45ms delta):
                     batterySaverTicks += 1
                     IF batterySaverTicks >= 2:
                         SWITCH detectedBaselineFps = 30
                         RESET sustainedDropTicks
-                ELSE IF currently 30Hz AND detected sudden FPS >= 45:
-                    SWITCH detectedBaselineFps = 60
+                ELSE IF detectedBaselineFps == 30 AND FPS >= 45:
+                    SWITCH detectedBaselineFps = (FPS > 65) ? ROUND(FPS) : 60
                     RESET sustainedDropTicks
                     RESET batterySaverTicks
-                ELSE IF currently 60Hz AND FPS is wild (Not locked to 30, high jitter):
+                ELSE IF detectedBaselineFps >= 60 AND FPS is wild (Not locked to 30, high jitter):
                     batterySaverTicks = max(0, batterySaverTicks - 1)
                     
-                // Threshold determination based on Tier and Battery mode
+                // Threshold determination based on Baseline
                 IF detectedBaselineFps == 30:
-                    currentFpsFloor = (initialTier == "high") ? 22 : 18
+                    currentFpsFloor = 22 // Device artificially clipped by OS
                 ELSE:
-                    currentFpsFloor = (initialTier == "high") ? 45 : 38
+                    currentFpsFloor = 40 // universally for 60Hz to >144Hz
                     
-                SET allowedDropTicks = (initialTier == "high") ? 4 : 6
+                SET allowedDropTicks = 3
                 
                 // Track struggle and execute downgrade
                 IF currentFPS < currentFpsFloor:

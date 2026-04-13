@@ -257,8 +257,8 @@ class HPOEProfiler {
 
     // Hard limits and Accessibility Overrides
     if (prefersReducedMotion) calculatedTier = "low";
-    else if (coreCount <= 2 && memory <= 2) calculatedTier = "very-low";
-    else if (coreCount <= 2 || memory <= 2) calculatedTier = "low";
+    else if (coreCount < 3 && memory < 3) calculatedTier = "very-low";
+    
     else if (memory <= 3 && calculatedTier === "high") calculatedTier = "mid";
 
     // Absolute fail-safe: Mobile devices NEVER get "High" tier effects.
@@ -284,6 +284,7 @@ class HPOEProfiler {
     let baselineFpsMeasurements = [];
     let detectedBaselineFps = 60;
     let midSessionBatterySaverTicks = 0;
+    let isBaselineLocked = false;
     
     let previousFrameTime = performance.now();
     let maxFrameDelta = 0;
@@ -304,30 +305,38 @@ class HPOEProfiler {
         if (elapsed <= 3000) {
           if (elapsed > 1000 && fps > 0) baselineFpsMeasurements.push(fps);
         } else {
-          if (baselineFpsMeasurements.length > 0 && detectedBaselineFps === 60) {
+          if (baselineFpsMeasurements.length > 0 && !isBaselineLocked) {
             const avg = baselineFpsMeasurements.reduce((a, b) => a + b, 0) / baselineFpsMeasurements.length;
-            if (avg >= 28 && avg <= 34 && maxFrameDelta < 45) {
-              detectedBaselineFps = 30;
-              console.info("[Hardware Profiler] Stable 30fps detected.");
+            if (avg > 65) {
+                detectedBaselineFps = Math.round(avg);
+                console.info(`[Hardware Profiler] Uncapped high refresh rate detected (~${detectedBaselineFps}Hz). Optimizing threshold for infinite-refresh smoothness.`);
+            } else if (avg >= 28 && avg <= 34 && maxFrameDelta < 45) {
+                detectedBaselineFps = 30;
+                console.info("[Hardware Profiler] Stable 30fps pacing with low jitter detected (Battery Saver/30Hz). Re-calibrating.");
+            } else {
+                detectedBaselineFps = 60;
             }
+            isBaselineLocked = true;
           }
 
-          if (detectedBaselineFps === 60 && fps >= 28 && fps <= 33 && maxFrameDelta < 45) {
+          if (detectedBaselineFps >= 60 && fps >= 28 && fps <= 33 && maxFrameDelta < 45) {
              midSessionBatterySaverTicks++;
              if (midSessionBatterySaverTicks >= 2) {
                 detectedBaselineFps = 30;
+                console.info("[Hardware Profiler] Mid-session Battery Saver activated. Stable 30fps pacing detected. Modifying limits.");
                 sustainedDropTicks = 0; 
              }
           } else if (detectedBaselineFps === 30 && fps >= 45) {
-             detectedBaselineFps = 60;
+             detectedBaselineFps = fps > 65 ? Math.round(fps) : 60;
+             console.info(`[Hardware Profiler] Mid-session Battery Saver disabled. ${detectedBaselineFps}fps cap restored.`);
              sustainedDropTicks = 0;
              midSessionBatterySaverTicks = 0;
-          } else if (detectedBaselineFps === 60 && (fps < 28 || fps > 33 || maxFrameDelta >= 45)) {
+          } else if (detectedBaselineFps >= 60 && (fps < 28 || fps > 33 || maxFrameDelta >= 45)) {
              midSessionBatterySaverTicks = Math.max(0, midSessionBatterySaverTicks - 1);
           }
 
-          let currentFpsFloor = detectedBaselineFps === 30 ? (this.tier === "high" ? 22 : 18) : (this.tier === "high" ? 45 : 38);
-          const currentRequiredDropTicks = this.tier === "high" ? 4 : 6;
+          let currentFpsFloor = detectedBaselineFps === 30 ? 22 : 40;
+          const currentRequiredDropTicks = 3;
 
           if (fps < currentFpsFloor) sustainedDropTicks++;
           else sustainedDropTicks = Math.max(0, sustainedDropTicks - 2);

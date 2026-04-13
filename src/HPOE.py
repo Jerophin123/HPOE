@@ -227,7 +227,7 @@ class HPOE:
 
         # Hard limits and Accessibility Overrides
         if prefers_reduced_motion: calculated_tier = "low"
-        elif cores <= 2 and memory_gb <= 2: calculated_tier = "very-low"
+        elif cores < 3 and memory_gb < 3: calculated_tier = "very-low"
         elif cores <= 2 or memory_gb <= 2: calculated_tier = "low" 
         elif memory_gb <= 3 and calculated_tier == "high": calculated_tier = "mid" 
         
@@ -248,6 +248,7 @@ class HPOE:
         detected_baseline = 60
         battery_saver_ticks = 0
         baseline_measurements = []
+        is_baseline_locked = False
         grace_period_ticks = 0
 
         while self.tier not in ["low", "very-low"]:
@@ -261,25 +262,30 @@ class HPOE:
                     baseline_measurements.append(fps)
                 continue
 
-            if len(baseline_measurements) > 0 and detected_baseline == 60:
+            if len(baseline_measurements) > 0 and not is_baseline_locked:
                 avg = sum(baseline_measurements) / len(baseline_measurements)
-                if 28 <= avg <= 34 and max_frame_delta < 45:
+                if avg > 65:
+                    detected_baseline = round(avg)
+                elif 28 <= avg <= 34 and max_frame_delta < 45:
                     detected_baseline = 30
+                else:
+                    detected_baseline = 60
+                is_baseline_locked = True
                     
-            if detected_baseline == 60 and 28 <= fps <= 33 and max_frame_delta < 45:
+            if detected_baseline >= 60 and 28 <= fps <= 33 and max_frame_delta < 45:
                 battery_saver_ticks += 1
                 if battery_saver_ticks >= 2:
                     detected_baseline = 30
                     sustained_drops = 0 
             elif detected_baseline == 30 and fps >= 45:
-                detected_baseline = 60
+                detected_baseline = round(fps) if fps > 65 else 60
                 sustained_drops = 0
                 battery_saver_ticks = 0
-            elif detected_baseline == 60 and (fps < 28 or fps > 33 or max_frame_delta >= 45):
+            elif detected_baseline >= 60 and (fps < 28 or fps > 33 or max_frame_delta >= 45):
                 battery_saver_ticks = max(0, battery_saver_ticks - 1)
                 
-            floor = (22 if self.tier == "high" else 18) if detected_baseline == 30 else (45 if self.tier == "high" else 38)
-            limit = 4 if self.tier == "high" else 6
+            floor = 22 if detected_baseline == 30 else 40
+            limit = 3
             
             if fps < floor: sustained_drops += 1
             else: sustained_drops = max(0, sustained_drops - 2)

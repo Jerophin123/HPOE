@@ -214,19 +214,21 @@ Instead of just counting FPS, the loop records `maxFrameDelta` tracking the maxi
 Why? Because an engine drawing 30FPS might be running perfectly smoothly, or it might be running 60fps for half a second, completely freezing up for 400ms, and rendering the rest to result in an average "30".
 Jitter (wild spikes in `maxFrameDelta`) signifies catastrophic software lag, not reliable hardware limitations.
 
-### Advanced Battery Saver Mode Logic
+### High Refresh Rate & Advanced Battery Saver Logic
 The true ingenuity of HPOE rests heavily inside this system.
 Historically, performance engines check if the FPS is below 40. If it is, they declare the machine slow and downgrade the graphics.
-However, modern Operating Systems (iOS Low Power Mode, Windows Battery Saver) implement hard, mathematical, OS-level V-Sync restrictions. They physically lock the display refresh rate to 30Hz or cap application draw limits strictly to 30 frames per second to save battery lifecycle. 
-
-If HPOE encounters an M3 Apple Silicon laptop on "Low Power Battery Saver" mode, it will naturally detect `30 FPS`. If it punished the user and removed all the graphics entirely based merely on dropping below a 40FPS threshold, it would be severely compromising the visual integrity. The machine clearly has the horsepower, it is merely artificially capped.
+However, this fails in two extreme environments:
+1. **Battery Saver OS Caps:** Modern Operating Systems (iOS Low Power Mode, Windows Battery Saver) physically lock the display refresh rate to 30Hz to save battery lifecycle. If HPOE encounters an M3 Apple Silicon laptop on "Low Power Battery Saver" mode, it naturally detects `30 FPS`. Punishing the user entirely based on dropping below a 40FPS threshold severely compromises visual integrity when the machine clearly has the horsepower but is artificially capped.
+2. **High Refresh Rate Displays:** Gaming monitors or flagship smartphones output natively at 120Hz, 144Hz, or 240Hz, needing to be tracked appropriately.
 
 **HPOE Solves this Elegantly:**
-If, precisely post the Grace Period, HPOE detects a stabilized average FPS grouping tightly between `28 - 34 FPS` while additionally verifying the `maxFrameDelta` is completely flat (less than 45ms jitter spacing), it makes an analytical leap. It mathematically proves the user is on Battery Saver/30Hz mode.
-HPOE alters its internal thresholds. The "Danger Limit Penalty Floors" dynamically shrink. 
-- Base Threshold Floor to trigger Penalties logic was `45 FPS`.
-- Re-adjusted Threshold Floor on Battery Saver Mode is mathematically dropped to `22 FPS`.
-The application recognizes the 30 FPS boundary, permits the Heavy graphics to persist seamlessly, and simply ensures that it doesn't dip severely below *that* baseline.
+If, precisely post the Grace Period, HPOE detects an average > 65 FPS, it dynamically recognizes uncapped high refresh rate environments (~120Hz/144Hz) optimizing thresholds for infinite-refresh smoothness.
+Conversely, if it detects a stabilized average FPS grouping tightly between `28 - 34 FPS` while additionally verifying the `maxFrameDelta` is completely flat (less than 45ms jitter spacing), it mathematically proves the user is on Battery Saver/30Hz mode.
+
+HPOE alters its internal thresholds based on this baseline constraint:
+- **60Hz & High Refresh Rate:** Base Threshold Floor operates universally at `40 FPS` for any 60Hz+ and High Refresh Rate displays.
+- **Battery Saver Mode:** Threshold Floor is mathematically dropped to `22 FPS` to avoid aggressive visual culling.
+The application recognizes the baseline boundary, permits the Heavy graphics to persist seamlessly, and simply ensures that it doesn't dip severely below *that* baseline.
 
 ### Sustained Drop Ticks Calculation
 Performance penalties do not execute instantly to avoid tearing UI off the screen when an external process grabs the CPU pipeline for a split second. HPOE requires *Sustained Drops*.
@@ -245,7 +247,7 @@ Only when sustained drops violate the ceiling logic (For High, limits to 4 conse
 ### Scenario B: Mid-Range Android entering Battery Saver
 **Device:** Samsung Galaxy A54 running Mali graphics on 20% Battery.
 **Execution Flow:** Resolves `mali g68`. Classifies as `Budget G-Series` mapping baseline capabilities. Core fail-safes recognize 6+ processors with memory intact. Caps `Mid` natively to protect Android thermals.
-The Android OS applies a 30 Hz output mode to prevent shutting down at low-battery limits. The Grace Period fires. HPOE calculates smooth averages around 29.8FPS. The AI algorithm kicks in identifying stable baseline battery saver behavior. Baseline threshold adjusts natively down to `18 FPS` floor levels allowing mid-tier visuals to execute steadily without forced disruption.
+The Android OS applies a 30 Hz output mode to prevent shutting down at low-battery limits. The Grace Period fires. HPOE calculates smooth averages around 29.8FPS. The AI algorithm kicks in identifying stable baseline battery saver behavior. Baseline threshold adjusts natively down to `22 FPS` floor levels allowing mid-tier visuals to execute steadily without forced disruption.
 
 ### Scenario C: The Unknown Budget Desktop
 **Device:** A corporate Dell machine running a highly outdated, obscure integrated graphics variant.
@@ -256,6 +258,30 @@ Monitor verifies baseline stable tracking smoothly due to stripped effects resol
 **Device:** Brand new Asus ROG Phone with active tracking, user has been playing intense 3D apps prior. 
 **Execution Flow:** Recognizes `Snapdragon 8 Elite`. Resolves architecture seamlessly, mathematically flagging it as Flagship class. Crucially: Recognizes `isMobileDevice = true`. Enforces physical hardware law restricting processing load down to `Tier: Mid`.
 While phone runs at `Mid`, the intense ambient thermal loads derived from previous user actions trigger physical kernel-level CPU throttling after 40 seconds. Frames suddenly buckle heavily diving from 60FPS down to wildly stuttering 23 FPS measurements alongside massive Frame Delta spacing. HPOE calculates sustained drop markers `+1, +2, +3`. Upon failing the safety boundaries, it fires an explicit warning log terminating `Mid` tier logic down to `Low`. The layout flattens dynamically and within 30 seconds the device sheds 10C worth of ambient temperature preventing critical failures.
+
+### Scenario E: High-End Desktop with 144Hz Gaming Monitor
+**Device:** RTX 4080 Desktop PC running Chrome at 144Hz.
+**Execution Flow:** The renderer string identifies `RTX 4080`. Architecture successfully resolves to `High-End Desktop`. `Tier: High` is assigned. The Grace Period initiates and reads a fluid stream of 144 frames per second. HPOE dynamically tracks the average (>65 FPS) and establishes the uncapped high refresh rate baseline. The engine now operates identically, ensuring the dynamic Danger Limit Penalty Threshold accommodates infinite-refresh smoothness. The UI maintains uncompromised fidelity seamlessly.
+
+### Scenario F: Next.js Initial Application Hydration
+**Device:** Powerful Desktop PC loading a heavily server-side rendered application.
+**Execution Flow:** During the first 1500ms of loading, massive React Javascript bundles are executed. Client-side hydration causes the main browser thread to freeze completely for 400ms. If HPOE monitored this instantly, the measured FPS would plummet to 12 FPS, forcing a brutal `Low` tier downgrade. However, the **3000ms Grace Period** shields the engine explicitly. The massive frame-delta skips are entirely ignored. Hydration finishes softly, the app hits a smooth 60FPS lock, and HPOE continues verifying `High` tier performance accurately.
+
+### Scenario G: Legacy Hardware under Extreme Resource Starvation
+**Device:** Old Windows 10 Tablet with 2GB of RAM and an Intel Atom dual-core CPU.
+**Execution Flow:** GPU renders as `Intel HD Graphics`. However, the system constraint overrides instantly kick in. `navigator.deviceMemory` registers `2GB` RAM and `navigator.hardwareConcurrency` logs `2`. HPOE completely aborts the visual validation, instantly restricting the system to `Tier: Very Low`. All blurs, background animations, particles, and heavy transitions are fundamentally banned. The interface provides static visual guarantees mapped securely to smooth business logic operation, preventing an outright browser tab crash.
+
+### Scenario H: iPhone 15 Pro Max Native Constraints
+**Device:** Flagship iOS Device rendering Mobile Safari.
+**Execution Flow:** WebGL obfuscates the GPU simply as `Apple GPU`. Auxiliary specs provide 8 cores and massive texture limits naturally hinting at a Desktop-class machine. However, the generic string matching verifies it as "A-Series", and `isMobile` functionally verifies `true`. The A-series flagship tries to run the intense visual layers, but HPOE's structural mobile law definitively overrides it, enforcing the immutable maximum limit of `Tier: Mid`. The device runs cool, refusing to generate excess thermal heat, preserving the iOS battery lifecycle elegantly.
+
+### Scenario I: Intel Iris Xe Laptop Heavy Multitasking
+**Device:** Modern Intel laptop hosting a video call alongside 40 active tabs while opening the site.
+**Execution Flow:** The GPU identifies correctly as `Intel Iris Xe`. Generally capable of reliable baseline graphics, it is assigned `Mid` globally. However, the heavily stressed CPU pipeline buckles under the sudden video-call rendering load. Frame Delta measurements spike severely, and FPS degrades systematically to 38 for consecutive seconds. HPOE calculates `+1, +2, +3` warning bounds. The ceiling limit is breached. HPOE logs an emergency scale-down transitioning the visual logic dynamically to `Tier: Low`. Heavy backdrop filters are cleared and the user's interactive session persists securely preventing the system from hanging entirely.
+
+### Scenario J: Unknown GPU with Flagship Auxiliaries
+**Device:** An entirely obscure or brand-new high-end desktop AI accelerator/GPU untracked in the classification matrix.
+**Execution Flow:** The WebGL regex drops out generating `Unknown Fallback`. Standard execution maps to `Low` to protect the ecosystem. However, HPOE interrogates the auxiliary specs and discovers 16 CPU Cores alongside `16GB+` of memory accompanied by 16384px texture max limits. Instead of aggressively restricting the unknown modern hardware, it intelligently bypasses the `Low` drop, gracefully upscaling the fallback and assigning it cautiously to `Tier: Mid`. The user experiences partial premium features while retaining absolute protection against arbitrary graphic faults.
 
 ---
 

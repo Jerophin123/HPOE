@@ -241,8 +241,8 @@ private:
         }
 
         // Hard limits and Accessibility Overrides
-        if (coreCount <= 2 && memoryGB <= 2) calculated = Tier::VERY_LOW;
-        else if (coreCount <= 2 || memoryGB <= 2) calculated = Tier::LOW;
+        if (coreCount < 3 && memoryGB < 3) calculated = Tier::VERY_LOW;
+        
         else if (memoryGB <= 3 && calculated == Tier::HIGH) calculated = Tier::MID;
         
         // Absolute fail-safe
@@ -259,6 +259,7 @@ private:
         int detectedBaseline = 60;
         int batterySaverTicks = 0;
         int gracePeriodTicks = 0;
+        bool isBaselineLocked = false;
         std::vector<int> measurements;
 
         while (isMonitoring && currentTier != Tier::VERY_LOW && currentTier != Tier::LOW) {
@@ -272,29 +273,34 @@ private:
                 continue;
             }
 
-            if (!measurements.empty() && detectedBaseline == 60) {
+            if (!measurements.empty() && !isBaselineLocked) {
                 double avg = std::accumulate(measurements.begin(), measurements.end(), 0.0) / measurements.size();
-                if (avg >= 28 && avg <= 34 && maxFrameDelta < 45) {
+                if (avg > 65) {
+                    detectedBaseline = (int)(avg + 0.5);
+                } else if (avg >= 28 && avg <= 34 && maxFrameDelta < 45) {
                     detectedBaseline = 30;
+                } else {
+                    detectedBaseline = 60;
                 }
+                isBaselineLocked = true;
             }
 
-            if (detectedBaseline == 60 && fps >= 28 && fps <= 33 && maxFrameDelta < 45) {
+            if (detectedBaseline >= 60 && fps >= 28 && fps <= 33 && maxFrameDelta < 45) {
                 batterySaverTicks++;
                 if (batterySaverTicks >= 2) {
                     detectedBaseline = 30;
                     sustainedDrops = 0; 
                 }
             } else if (detectedBaseline == 30 && fps >= 45) {
-                detectedBaseline = 60;
+                detectedBaseline = (fps > 65) ? fps : 60;
                 sustainedDrops = 0;
                 batterySaverTicks = 0;
-            } else if (detectedBaseline == 60 && (fps < 28 || fps > 33 || maxFrameDelta >= 45)) {
+            } else if (detectedBaseline >= 60 && (fps < 28 || fps > 33 || maxFrameDelta >= 45)) {
                 batterySaverTicks = std::max(0, batterySaverTicks - 1);
             }
 
-            int floor = (detectedBaseline == 30) ? ((currentTier == Tier::HIGH) ? 22 : 18) : ((currentTier == Tier::HIGH) ? 45 : 38);
-            int limit = (currentTier == Tier::HIGH) ? 4 : 6;
+            int floor = (detectedBaseline == 30) ? 22 : 40;
+            int limit = 3;
 
             if (fps < floor) sustainedDrops++;
             else sustainedDrops = std::max(0, sustainedDrops - 2);

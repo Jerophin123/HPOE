@@ -262,7 +262,7 @@ impl HpoeProfiler {
         }
 
         // Hard limits and Accessibility Overrides
-        if cores <= 2 && memory_gb <= 2 { calc = Tier::VeryLow; }
+        if cores < 3 && memory_gb < 3 { calc = Tier::VeryLow; }
         else if cores <= 2 || memory_gb <= 2 { calc = Tier::Low; } // Only demote on extremely constrained hardware
         else if memory_gb <= 3 && calc == Tier::High { calc = Tier::Mid; } // <=3GB memory can't sustain high-tier
         
@@ -282,11 +282,12 @@ impl HpoeProfiler {
             let mut detected_baseline = 60; // Assume standard 60fps by default
             let mut battery_saver_ticks = 0;
             let mut grace_ticks = 0;
+            let mut is_baseline_locked = false;
             let mut measurements: Vec<u32> = Vec::new();
 
             loop {
                 thread::sleep(Duration::from_secs(1));
-                let mut current_tier = *tier_clone.lock().unwrap();
+                let current_tier = *tier_clone.lock().unwrap();
                 if current_tier == Tier::VeryLow || current_tier == Tier::Low { break; }
                 
                 let fps = Self::mock_app_fps();
@@ -298,31 +299,35 @@ impl HpoeProfiler {
                     continue;
                 }
 
-                if !measurements.is_empty() && detected_baseline == 60 {
+                if !measurements.is_empty() && !is_baseline_locked {
                     let sum: u32 = measurements.iter().sum();
                     let avg = sum as f64 / measurements.len() as f64;
-                    if avg >= 28.0 && avg <= 34.0 && max_frame_delta < 45 {
+                    if avg > 65.0 {
+                        detected_baseline = avg.round() as u32;
+                    } else if avg >= 28.0 && avg <= 34.0 && max_frame_delta < 45 {
                         detected_baseline = 30;
+                    } else {
+                        detected_baseline = 60;
                     }
+                    is_baseline_locked = true;
                 }
 
-                if detected_baseline == 60 && fps >= 28 && fps <= 33 && max_frame_delta < 45 {
+                if detected_baseline >= 60 && fps >= 28 && fps <= 33 && max_frame_delta < 45 {
                     battery_saver_ticks += 1;
                     if battery_saver_ticks >= 2 {
                         detected_baseline = 30;
                         sustained_drops = 0; 
                     }
                 } else if detected_baseline == 30 && fps >= 45 {
-                    detected_baseline = 60;
+                    detected_baseline = if fps > 65 { fps } else { 60 };
                     sustained_drops = 0;
                     battery_saver_ticks = 0;
-                } else if detected_baseline == 60 && (fps < 28 || fps > 33 || max_frame_delta >= 45) {
+                } else if detected_baseline >= 60 && (fps < 28 || fps > 33 || max_frame_delta >= 45) {
                     battery_saver_ticks = battery_saver_ticks.saturating_sub(1);
                 }
 
-                let floor = if detected_baseline == 30 { if current_tier == Tier::High { 22 } else { 18 } } 
-                            else { if current_tier == Tier::High { 45 } else { 38 } };
-                let limit = if current_tier == Tier::High { 4 } else { 6 };
+                let floor = if detected_baseline == 30 { 22 } else { 40 };
+                let limit = 3;
                 
                 if fps < floor { sustained_drops += 1; } else { sustained_drops = sustained_drops.saturating_sub(2); }
                 
