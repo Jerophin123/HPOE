@@ -168,7 +168,8 @@ Intel historically struggles internally with heavily layered raster compositing 
 - Even complex Intel processors like the `Iris Xe` or modern `Arc Alchemist` are deliberately capped at `Mid`. While powerful, Intel GPU web-layer acceleration heavily falls prey to sudden driver-level jank, rendering them slightly unsafe for Tier 1 `High` assignments.
 
 #### 5. Qualcomm Adreno / Snapdragons
-Crucial to the Android market share. HPOE attempts to extract the numerical pattern `adreno\s*([0-9]{3})`.
+Crucial to the Android and ARM Desktop market share. HPOE attempts to extract the numerical pattern `adreno\s*([0-9]{3})`.
+- If we detect `"snapdragon x"` or `"x elite"`, it securely categorizes as an ARM Desktop handling Integrated level classifications, pushing bounds into `High-End`.
 - The `800+` series handles modern high-end output seamlessly (flagging theoretical `High-End`).
 - `700` series bridges mid-range output perfectly.
 - In instances identifying `"snapdragon 8 elite"`, we assign the architecture Flagship variables.
@@ -179,7 +180,8 @@ Crucial to the Android market share. HPOE attempts to extract the numerical patt
 - **Samsung Xclipse:** Specifically extracts the RDNA architecture versions generated on modern Exynos variants (`xclipse [0-9]{3}`).
 - **MediaTek:** Standardized regex logic targets `dimensity` high-end monikers to bypass fallback errors.
 
-#### 10 - 11. Legacy and Fallback Triggers
+#### 10 - 12. Raspberry Pi, Legacy and Fallback Triggers
+- Broadcom components like `videocore` targeting the Raspberry Pi are strictly contained. Pi 4/5 units possessing `v3d 4` are designated `Low`, whereas older iterations are locked into `Very Low` purely for UI persistence without crashing.
 - Any SOC falling to `powervr`, `unisoc`, or `spreadtrum` inherently lacks the graphical throughput rendering it directly unsafe for processing multi-layered Gaussian rendering.
 - If the GPU is globally unrecognized, it utilizes the "Assume the worst to protect the user" philosophy and caps at `Low`.
 

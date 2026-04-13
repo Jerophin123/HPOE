@@ -131,31 +131,40 @@ private:
                 calculated = Tier::LOW;
             }
         }
-        // 5. QUALCOMM ADRENO / SNAPDRAGON (ANDROID)
+        // 5. QUALCOMM ADRENO / SNAPDRAGON (ANDROID & ARM PC)
         else if (renderer.find("adreno") != std::string::npos || renderer.find("snapdragon") != std::string::npos) {
             specs.vendor = "Qualcomm";
-            specs.type = "Mobile";
             std::smatch match;
             int series = 0;
             if (std::regex_search(renderer, match, std::regex("adreno\\s*([0-9]{3})"))) series = std::stoi(match[1].str());
             
-            if (series >= 800 || renderer.find("snapdragon 8 elite") != std::string::npos || renderer.find("elite") != std::string::npos) {
+            if (renderer.find("snapdragon x") != std::string::npos || renderer.find("x elite") != std::string::npos || renderer.find("x plus") != std::string::npos || series >= 900) {
+                specs.type = "Integrated";
+                specs.architecture = "Snapdragon X Series (ARM Desktop)";
+                specs.estimatedClass = "High-End";
+                calculated = Tier::HIGH;
+            } else if (series >= 800 || renderer.find("snapdragon 8 elite") != std::string::npos || renderer.find("elite") != std::string::npos) {
+                specs.type = "Mobile";
                 specs.architecture = (series != 0) ? "Adreno " + std::to_string(series) : "Snapdragon 8 Elite Flagship";
                 specs.estimatedClass = "High-End";
                 calculated = Tier::HIGH;
             } else if (series >= 730 || renderer.find("snapdragon 8 gen") != std::string::npos) {
+                specs.type = "Mobile";
                 specs.architecture = (series != 0) ? "Adreno " + std::to_string(series) : "Snapdragon 8 Gen Flagship";
                 specs.estimatedClass = "High-End";
                 calculated = Tier::HIGH;
             } else if (series >= 650 || renderer.find("snapdragon 8") != std::string::npos || renderer.find("snapdragon 7") != std::string::npos) {
+                specs.type = "Mobile";
                 specs.architecture = (series != 0) ? "Adreno " + std::to_string(series) : "Snapdragon 7/8 Series";
                 specs.estimatedClass = "Mid-Range";
                 calculated = Tier::MID;
             } else if ((series == 0 && coreCount >= 8 && maxTextureSize >= 8192) || renderer.find("snapdragon") != std::string::npos) {
+                specs.type = "Mobile";
                 specs.architecture = "Modern Adreno/Snapdragon (Masked)";
                 specs.estimatedClass = "Mid-Range";
                 calculated = Tier::MID;
             } else {
+                specs.type = "Mobile";
                 specs.architecture = "Adreno " + ((series != 0) ? std::to_string(series) : "Legacy");
                 specs.estimatedClass = "Budget/Legacy";
                 calculated = Tier::LOW;
@@ -229,9 +238,23 @@ private:
         else if (renderer.find("powervr") != std::string::npos || renderer.find("unisoc") != std::string::npos || renderer.find("spreadtrum") != std::string::npos || renderer.find("tigert") != std::string::npos) {
             specs.vendor = "Unisoc / PowerVR";
             specs.type = "Mobile";
-            specs.architecture = "Legacy Budget";
+            specs.architecture = "Legacy Mobile SoC";
             specs.estimatedClass = "Budget/Legacy";
             calculated = Tier::LOW;
+        }
+        // 10. BROADCOM / RASPBERRY PI
+        else if (renderer.find("videocore") != std::string::npos || renderer.find("v3d") != std::string::npos || renderer.find("broadcom") != std::string::npos || renderer.find("raspberry") != std::string::npos) {
+            specs.vendor = "Broadcom";
+            specs.type = "Integrated";
+            if (renderer.find("v3d 4") != std::string::npos || renderer.find("v3d 4.2") != std::string::npos || renderer.find("videocore vi") != std::string::npos || renderer.find("videocore vii") != std::string::npos) {
+                specs.architecture = "VideoCore VI/VII (Raspberry Pi 4/5)";
+                specs.estimatedClass = "Budget/Legacy";
+                calculated = Tier::LOW;
+            } else {
+                specs.architecture = "VideoCore IV/V (Raspberry Pi Legacy)";
+                specs.estimatedClass = "Budget/Legacy";
+                calculated = Tier::VERY_LOW;
+            }
         } 
         // 10. FALLBACK FOR UNKNOWN GPUs
         else {

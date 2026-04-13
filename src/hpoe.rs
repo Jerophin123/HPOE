@@ -158,27 +158,33 @@ impl HpoeProfiler {
                 calc = Tier::Low; 
             }
         } 
-        // 5. QUALCOMM ADRENO / SNAPDRAGON (ANDROID)
+        // 5. QUALCOMM ADRENO / SNAPDRAGON (ANDROID & ARM PC)
         else if has("adreno") || has("snapdragon") {
             specs_lock.vendor = "Qualcomm".into();
-            specs_lock.h_type = "Mobile".into();
-            let re_adreno = Regex::new(r"adreno\s*([0-9]{3})").unwrap();
+            let re = Regex::new(r"adreno\s*([0-9]{3})").unwrap();
             let mut series = 0;
-            if let Some(caps) = re_adreno.captures(&renderer) { series = caps[1].parse::<i32>().unwrap_or(0); }
-            if series >= 800 || has("snapdragon 8 elite") || has("elite") || has("snapdragon 8 gen") { 
+            if let Some(caps) = re.captures(&renderer) { series = caps[1].parse().unwrap_or(0); }
+            
+            if has("snapdragon x") || has("x elite") || has("x plus") || series >= 900 {
+                specs_lock.device_type = "Integrated".into();
+                specs_lock.architecture = "Snapdragon X Series (ARM Desktop)".into();
+                specs_lock.estimated_class = "High-End".into();
+                calc = Tier::High;
+            } else if series >= 800 || has("snapdragon 8 elite") || has("elite") || has("snapdragon 8 gen") {
+                specs_lock.device_type = "Mobile".into();
                 specs_lock.architecture = if series != 0 { format!("Adreno {}", series) } else { "Snapdragon 8 Elite".into() };
                 specs_lock.estimated_class = "High-End".into();
-                calc = Tier::High; 
-            }
-            else if series >= 650 || has("snapdragon 8") || has("snapdragon 7") || (series == 0 && cores >= 8 && max_texture_size >= 8192) || has("snapdragon") { 
+                calc = Tier::High;
+            } else if series >= 650 || has("snapdragon 8") || has("snapdragon 7") || (series == 0 && cores >= 8 && mem >= 8192) || has("snapdragon") {
+                specs_lock.device_type = "Mobile".into();
                 specs_lock.architecture = if series != 0 { format!("Adreno {}", series) } else { "Snapdragon 7/8".into() };
                 specs_lock.estimated_class = "Mid-Range".into();
-                calc = Tier::Mid; 
-            }
-            else { 
+                calc = Tier::Mid;
+            } else {
+                specs_lock.device_type = "Mobile".into();
                 specs_lock.architecture = "Adreno Legacy".into();
                 specs_lock.estimated_class = "Budget/Legacy".into();
-                calc = Tier::Low; 
+                calc = Tier::Low;
             }
         } 
         // 6. ARM MALI (ANDROID)
@@ -250,11 +256,27 @@ impl HpoeProfiler {
         } 
         // 9. POWERVR / UNISOC / SPREADTRUM
         else if has("powervr") || has("unisoc") || has("spreadtrum") || has("tigert") {
-            specs_lock.architecture = "Legacy/Budget".into();
+            specs_lock.vendor = "Unisoc/PowerVR".into();
+            specs_lock.device_type = "Mobile".into();
+            specs_lock.architecture = "Legacy Mobile SoC".into();
             specs_lock.estimated_class = "Budget/Legacy".into();
             calc = Tier::Low;
         } 
-        // 10. FALLBACK FOR UNKNOWN GPUs
+        // 10. BROADCOM / RASPBERRY PI
+        else if has("videocore") || has("v3d") || has("broadcom") || has("raspberry") {
+            specs_lock.vendor = "Broadcom".into();
+            specs_lock.device_type = "Integrated".into();
+            if has("v3d 4") || has("v3d 4.2") || has("videocore vi") || has("videocore vii") {
+                specs_lock.architecture = "VideoCore VI/VII (Raspberry Pi 4/5)".into();
+                specs_lock.estimated_class = "Budget/Legacy".into();
+                calc = Tier::Low;
+            } else {
+                specs_lock.architecture = "VideoCore IV/V (Raspberry Pi Legacy)".into();
+                specs_lock.estimated_class = "Budget/Legacy".into();
+                calc = Tier::VeryLow;
+            }
+        } 
+        // 11. FALLBACK FOR UNKNOWN GPUs
         else { 
             specs_lock.architecture = "Unknown (Fallback)".into();
             specs_lock.estimated_class = "Budget/Legacy".into();

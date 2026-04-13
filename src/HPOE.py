@@ -116,30 +116,39 @@ class HPOE:
                 self.specs["estimatedClass"] = "Budget/Legacy"
                 calculated_tier = "low"
             
-        # 5. QUALCOMM ADRENO / SNAPDRAGON (ANDROID)
+        # 5. QUALCOMM ADRENO / SNAPDRAGON (ANDROID & ARM PC)
         elif "adreno" in renderer or "snapdragon" in renderer:
             self.specs["vendor"] = "Qualcomm"
-            self.specs["type"] = "Mobile"
             match = re.search(r'adreno\s*([0-9]{3})', renderer)
             series = int(match.group(1)) if match else 0
             
-            if series >= 800 or "snapdragon 8 elite" in renderer or "elite" in renderer:
+            if "snapdragon x" in renderer or "x elite" in renderer or "x plus" in renderer or series >= 900:
+                self.specs["type"] = "Integrated"
+                self.specs["architecture"] = "Snapdragon X Series (ARM Desktop)"
+                self.specs["estimatedClass"] = "High-End"
+                calculated_tier = "high"
+            elif series >= 800 or "snapdragon 8 elite" in renderer or "elite" in renderer:
+                self.specs["type"] = "Mobile"
                 self.specs["architecture"] = f"Adreno {series}" if series else "Snapdragon 8 Elite Flagship"
                 self.specs["estimatedClass"] = "High-End"
                 calculated_tier = "high"
             elif series >= 730 or "snapdragon 8 gen" in renderer:
+                self.specs["type"] = "Mobile"
                 self.specs["architecture"] = f"Adreno {series}" if series else "Snapdragon 8 Gen Flagship"
                 self.specs["estimatedClass"] = "High-End"
                 calculated_tier = "high"
             elif series >= 650 or "snapdragon 8" in renderer or "snapdragon 7" in renderer:
+                self.specs["type"] = "Mobile"
                 self.specs["architecture"] = f"Adreno {series}" if series else "Snapdragon 7/8 Series"
                 self.specs["estimatedClass"] = "Mid-Range"
                 calculated_tier = "mid"
             elif (series == 0 and cores >= 8 and max_texture_size >= 8192) or "snapdragon" in renderer:
+                self.specs["type"] = "Mobile"
                 self.specs["architecture"] = "Modern Adreno/Snapdragon (Masked)"
                 self.specs["estimatedClass"] = "Mid-Range"
                 calculated_tier = "mid"
             else:
+                self.specs["type"] = "Mobile"
                 self.specs["architecture"] = f"Adreno {series or 'Legacy'}"
                 self.specs["estimatedClass"] = "Budget/Legacy"
                 calculated_tier = "low"
@@ -218,6 +227,19 @@ class HPOE:
             self.specs["architecture"] = "Unisoc / Spreadtrum"
             self.specs["estimatedClass"] = "Budget/Legacy"
             calculated_tier = "low"
+            
+        # 11. BROADCOM / RASPBERRY PI
+        elif "videocore" in renderer or "v3d" in renderer or "broadcom" in renderer or "raspberry" in renderer:
+            self.specs["vendor"] = "Broadcom"
+            self.specs["type"] = "Integrated"
+            if "v3d 4" in renderer or "v3d 4.2" in renderer or "videocore vi" in renderer or "videocore vii" in renderer:
+                self.specs["architecture"] = "VideoCore VI/VII (Raspberry Pi 4/5)"
+                self.specs["estimatedClass"] = "Budget/Legacy"
+                calculated_tier = "low"
+            else:
+                self.specs["architecture"] = "VideoCore IV/V (Raspberry Pi Legacy)"
+                self.specs["estimatedClass"] = "Budget/Legacy"
+                calculated_tier = "very-low"
 
         # 11. FALLBACK FOR UNKNOWN GPUs
         if renderer == "unknown gpu" or renderer == "unknown" or self.specs["vendor"] == "Unknown":

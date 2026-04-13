@@ -125,21 +125,29 @@ class HPOE {
         calc = HpoeTier.low;
       }
     } 
-    // 5. QUALCOMM ADRENO / SNAPDRAGON (ANDROID)
-    else if (has("adreno") || has("snapdragon")) {
+    // 5. QUALCOMM ADRENO / SNAPDRAGON (ANDROID & ARM PC)
+    else if (renderer.contains("adreno") || renderer.contains("snapdragon")) {
       specs.vendor = "Qualcomm";
-      specs.type = "Mobile";
-      var match = RegExp(r"adreno\s*([0-9]{3})").firstMatch(renderer);
-      int series = match != null ? int.parse(match.group(1)!) : 0;
-      if (series >= 800 || has("snapdragon 8 elite") || has("elite") || has("snapdragon 8 gen")) {
-        specs.architecture = series != 0 ? "Adreno $series" : "Snapdragon 8 Elite Flagship";
+      final match = RegExp(r'adreno\s*([0-9]{3})').firstMatch(renderer);
+      final series = match != null ? int.tryParse(match.group(1)!) ?? 0 : 0;
+      
+      if (renderer.contains("snapdragon x") || renderer.contains("x elite") || renderer.contains("x plus") || series >= 900) {
+        specs.type = "Integrated";
+        specs.architecture = "Snapdragon X Series (ARM Desktop)";
         specs.estimatedClass = "High-End";
         calc = HpoeTier.high;
-      } else if (series >= 650 || has("snapdragon 8") || has("snapdragon 7") || (series == 0 && cores >= 8 && maxTextureSize >= 8192) || has("snapdragon")) {
-        specs.architecture = series != 0 ? "Adreno $series" : "Snapdragon 7/8 Series";
+      } else if (series >= 800 || renderer.contains("snapdragon 8 elite") || renderer.contains("elite") || renderer.contains("snapdragon 8 gen")) {
+        specs.type = "Mobile";
+        specs.architecture = series != 0 ? "Adreno $series" : "Snapdragon 8 Elite";
+        specs.estimatedClass = "High-End";
+        calc = HpoeTier.high;
+      } else if (series >= 650 || renderer.contains("snapdragon 8") || renderer.contains("snapdragon 7") || (series == 0 && cores >= 8 && maxTextureSize >= 8192) || renderer.contains("snapdragon")) {
+        specs.type = "Mobile";
+        specs.architecture = series != 0 ? "Adreno $series" : "Snapdragon 7/8";
         specs.estimatedClass = "Mid-Range";
         calc = HpoeTier.mid;
       } else {
+        specs.type = "Mobile";
         specs.architecture = "Adreno Legacy";
         specs.estimatedClass = "Budget/Legacy";
         calc = HpoeTier.low;
@@ -210,11 +218,27 @@ class HPOE {
     } 
     // 9. POWERVR / UNISOC / SPREADTRUM
     else if (has("powervr") || has("unisoc") || has("spreadtrum") || has("tigert")) {
-      specs.architecture = "Legacy Budget";
+      specs.vendor = "Unisoc/PowerVR";
+      specs.type = "Mobile";
+      specs.architecture = "Legacy Mobile SoC";
       specs.estimatedClass = "Budget/Legacy";
       calc = HpoeTier.low;
     } 
-    // 10. FALLBACK FOR UNKNOWN GPUs
+    // 10. BROADCOM / RASPBERRY PI
+    else if (has("videocore") || has("v3d") || has("broadcom") || has("raspberry")) {
+      specs.vendor = "Broadcom";
+      specs.type = "Integrated";
+      if (has("v3d 4") || has("v3d 4.2") || has("videocore vi") || has("videocore vii")) {
+        specs.architecture = "VideoCore VI/VII (Raspberry Pi 4/5)";
+        specs.estimatedClass = "Budget/Legacy";
+        calc = HpoeTier.low;
+      } else {
+        specs.architecture = "VideoCore IV/V (Raspberry Pi Legacy)";
+        specs.estimatedClass = "Budget/Legacy";
+        calc = HpoeTier.veryLow;
+      }
+    } 
+    // 11. FALLBACK FOR UNKNOWN GPUs
     else { 
       specs.architecture = "Unknown (Fallback)";
       specs.estimatedClass = "Budget/Legacy";

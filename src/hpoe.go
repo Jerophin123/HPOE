@@ -155,22 +155,30 @@ func (h *HPOE) EvaluateHardware() {
 			tier = Low 
 		}
 	} 
-	// 5. QUALCOMM ADRENO / SNAPDRAGON (ANDROID)
+	// 5. QUALCOMM ADRENO / SNAPDRAGON (ANDROID & ARM PC)
 	else if has("adreno") || has("snapdragon") {
 		h.Specs.Vendor = "Qualcomm"
-		h.Specs.Type = "Mobile"
 		reAdreno := regexp.MustCompile(`adreno\s*([0-9]{3})`)
 		series := 0
 		if m := reAdreno.FindStringSubmatch(renderer); len(m) > 1 { series, _ = strconv.Atoi(m[1]) }
-		if series >= 800 || has("snapdragon 8 elite") || has("elite") || has("snapdragon 8 gen") { 
+		
+		if has("snapdragon x") || has("x elite") || has("x plus") || (series >= 900) {
+			h.Specs.Type = "Integrated"
+			h.Specs.Architecture = "Snapdragon X Series (ARM Desktop)"
+			h.Specs.EstimatedClass = "High-End"
+			tier = High
+		} else if series >= 800 || has("snapdragon 8 elite") || has("elite") || has("snapdragon 8 gen") { 
+			h.Specs.Type = "Mobile"
 			h.Specs.Architecture = fmt.Sprintf("Adreno %d", series)
 			h.Specs.EstimatedClass = "High-End"
 			tier = High 
 		} else if series >= 650 || has("snapdragon 8") || has("snapdragon 7") || (series == 0 && cores >= 8 && maxTextureSize >= 8192) || has("snapdragon") { 
+			h.Specs.Type = "Mobile"
 			h.Specs.Architecture = fmt.Sprintf("Adreno %d", series)
 			h.Specs.EstimatedClass = "Mid-Range"
 			tier = Mid 
 		} else { 
+			h.Specs.Type = "Mobile"
 			h.Specs.Architecture = "Adreno Legacy"
 			h.Specs.EstimatedClass = "Budget/Legacy"
 			tier = Low 
@@ -241,9 +249,25 @@ func (h *HPOE) EvaluateHardware() {
 	} 
 	// 9. POWERVR / UNISOC / SPREADTRUM
 	else if has("powervr") || has("unisoc") || has("spreadtrum") || has("tigert") {
-		h.Specs.Architecture = "Legacy Budget"
+		h.Specs.Vendor = "Unisoc/PowerVR"
+		h.Specs.Type = "Mobile"
+		h.Specs.Architecture = "Legacy Mobile SoC"
 		h.Specs.EstimatedClass = "Budget/Legacy"
-		tier = Low
+		tier = Low 
+	} 
+	// 10. BROADCOM / RASPBERRY PI
+	else if has("videocore") || has("v3d") || has("broadcom") || has("raspberry") {
+		h.Specs.Vendor = "Broadcom"
+		h.Specs.Type = "Integrated"
+		if has("v3d 4") || has("v3d 4.2") || has("videocore vi") || has("videocore vii") {
+			h.Specs.Architecture = "VideoCore VI/VII (Raspberry Pi 4/5)"
+			h.Specs.EstimatedClass = "Budget/Legacy"
+			tier = Low
+		} else {
+			h.Specs.Architecture = "VideoCore IV/V (Raspberry Pi Legacy)"
+			h.Specs.EstimatedClass = "Budget/Legacy"
+			tier = VeryLow
+		}
 	} 
 	// 10. FALLBACK FOR UNKNOWN GPUs
 	else {

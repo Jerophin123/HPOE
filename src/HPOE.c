@@ -170,21 +170,29 @@ void hpoe_evaluate(HPOEProfiler* p) {
             calc = TIER_LOW;
         }
     } 
-    // 5. QUALCOMM ADRENO / SNAPDRAGON (ANDROID)
+    // 5. QUALCOMM ADRENO / SNAPDRAGON (ANDROID & ARM PC)
     else if (strstr(gpu, "adreno") || strstr(gpu, "snapdragon")) {
         strcpy(p->specs.vendor, "Qualcomm");
-        strcpy(p->specs.type, "Mobile");
         int series = 0;
         extract_series("adreno\\s*([0-9]{3})", gpu, &series);
-        if (series >= 800 || strstr(gpu, "snapdragon 8 elite") || strstr(gpu, "elite") || strstr(gpu, "snapdragon 8 gen")) {
+        
+        if (strstr(gpu, "snapdragon x") || strstr(gpu, "x elite") || strstr(gpu, "x plus") || series >= 900) {
+            strcpy(p->specs.type, "Integrated");
+            strcpy(p->specs.architecture, "Snapdragon X Series (ARM Desktop)");
+            strcpy(p->specs.estimatedClass, "High-End");
+            calc = TIER_HIGH;
+        } else if (series >= 800 || strstr(gpu, "snapdragon 8 elite") || strstr(gpu, "elite") || strstr(gpu, "snapdragon 8 gen")) {
+            strcpy(p->specs.type, "Mobile");
             sprintf(p->specs.architecture, series ? "Adreno %d" : "Snapdragon 8 Elite", series);
             strcpy(p->specs.estimatedClass, "High-End");
             calc = TIER_HIGH;
         } else if (series >= 650 || strstr(gpu, "snapdragon 8") || strstr(gpu, "snapdragon 7") || (series == 0 && cores >= 8 && maxTextureSize >= 8192) || strstr(gpu, "snapdragon")) {
+            strcpy(p->specs.type, "Mobile");
             sprintf(p->specs.architecture, series ? "Adreno %d" : "Snapdragon 7/8", series);
             strcpy(p->specs.estimatedClass, "Mid-Range");
             calc = TIER_MID;
         } else {
+            strcpy(p->specs.type, "Mobile");
             strcpy(p->specs.architecture, "Adreno Legacy");
             strcpy(p->specs.estimatedClass, "Budget/Legacy");
             calc = TIER_LOW;
@@ -255,11 +263,25 @@ void hpoe_evaluate(HPOEProfiler* p) {
     } 
     // 9. POWERVR / UNISOC / SPREADTRUM
     else if (strstr(gpu, "powervr") || strstr(gpu, "unisoc") || strstr(gpu, "spreadtrum") || strstr(gpu, "tigert")) {
-        strcpy(p->specs.vendor, "Other Mobile");
+        strcpy(p->specs.vendor, "Unisoc/PowerVR");
         strcpy(p->specs.type, "Mobile");
-        strcpy(p->specs.architecture, "Legacy");
+        strcpy(p->specs.architecture, "Legacy Mobile SoC");
         strcpy(p->specs.estimatedClass, "Budget/Legacy");
         calc = TIER_LOW;
+    } 
+    // 10. BROADCOM / RASPBERRY PI
+    else if (strstr(gpu, "videocore") || strstr(gpu, "v3d") || strstr(gpu, "broadcom") || strstr(gpu, "raspberry")) {
+        strcpy(p->specs.vendor, "Broadcom");
+        strcpy(p->specs.type, "Integrated");
+        if (strstr(gpu, "v3d 4") || strstr(gpu, "v3d 4.2") || strstr(gpu, "videocore vi") || strstr(gpu, "videocore vii")) {
+            strcpy(p->specs.architecture, "VideoCore VI/VII (Raspberry Pi 4/5)");
+            strcpy(p->specs.estimatedClass, "Budget/Legacy");
+            calc = TIER_LOW;
+        } else {
+            strcpy(p->specs.architecture, "VideoCore IV/V (Raspberry Pi Legacy)");
+            strcpy(p->specs.estimatedClass, "Budget/Legacy");
+            calc = TIER_VERY_LOW;
+        }
     } 
     // 10. FALLBACK FOR UNKNOWN GPUs
     else { 

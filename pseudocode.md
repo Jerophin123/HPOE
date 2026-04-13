@@ -102,17 +102,24 @@ FUNCTION InitializeProfiler():
             specs.architecture = "UHD / HD Legacy", specs.type = "Integrated"
             specs.estimatedClass = "Budget/Legacy", calculatedTier = "low"
         
-    // 5. QUALCOMM ADRENO / SNAPDRAGON (ANDROID)
+    // 5. QUALCOMM ADRENO / SNAPDRAGON (ANDROID & ARM PC)
     ELSE IF rendererString INCLUDES ("adreno" OR "snapdragon"):
-        specs.vendor = "Qualcomm", specs.type = "Mobile"
+        specs.vendor = "Qualcomm"
         EXTRACT adreno_series_number
-        IF series >= 800 OR is Elite: 
+        IF is Snapdragon X Series OR series >= 900:
+            specs.type = "Integrated"
+            specs.architecture = "Snapdragon X Series (ARM Desktop)"
+            specs.estimatedClass = "High-End", calculatedTier = "high"
+        ELSE IF series >= 800 OR is Elite: 
+            specs.type = "Mobile"
             specs.architecture = "Adreno [series] / Flagship"
             specs.estimatedClass = "High-End", calculatedTier = "high"
         ELSE IF series >= 650 OR Modern Masked: 
+            specs.type = "Mobile"
             specs.architecture = "Adreno [series] / Snapdragon 7/8 Series"
             specs.estimatedClass = "Mid-Range", calculatedTier = "mid"
         ELSE: 
+            specs.type = "Mobile"
             specs.architecture = "Adreno Legacy"
             specs.estimatedClass = "Budget/Legacy", calculatedTier = "low"
         
@@ -159,7 +166,17 @@ FUNCTION InitializeProfiler():
         specs.type = "Mobile", specs.estimatedClass = "Budget/Legacy"
         calculatedTier = "low"
         
-    // 10. FALLBACK FOR UNKNOWN GPUs
+    // 10. BROADCOM / RASPBERRY PI
+    ELSE IF rendererString INCLUDES ("videocore" OR "v3d" OR "broadcom" OR "raspberry"):
+        specs.vendor = "Broadcom", specs.type = "Integrated"
+        IF is VideoCore VI/VII:
+            specs.architecture = "VideoCore VI/VII (Raspberry Pi 4/5)"
+            specs.estimatedClass = "Budget/Legacy", calculatedTier = "low"
+        ELSE:
+            specs.architecture = "VideoCore IV/V (Raspberry Pi Legacy)"
+            specs.estimatedClass = "Budget/Legacy", calculatedTier = "very-low"
+        
+    // 11. FALLBACK FOR UNKNOWN GPUs
     ELSE:
         specs.architecture = "Unknown (Fallback)"
         specs.estimatedClass = "Budget/Legacy"
